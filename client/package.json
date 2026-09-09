@@ -1,0 +1,43 @@
+{
+  "name": "@thermowatch/client",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "description": "ThermoWatch — AI-based detection & classification of industrial fires and persistent thermal sources (SIH26162 / NTRO)",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@deck.gl/aggregation-layers": "^9.4.0",
+    "@deck.gl/core": "^9.0.0",
+    "@deck.gl/layers": "^9.0.0",
+    "@deck.gl/mapbox": "^9.0.0",
+    "@duckdb/duckdb-wasm": "^1.29.0",
+    "@emotion/react": "^11.13.0",
+    "@emotion/styled": "^11.13.0",
+    "@mui/icons-material": "^7.1.0",
+    "@mui/material": "^7.1.0",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.545.0",
+    "maplibre-gl": "^5.9.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-globe.gl": "^2.35.0",
+    "zustand": "^5.0.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.13",
+    "@types/node": "^24.5.2",
+    "@types/react": "^19.1.10",
+    "@types/react-dom": "^19.1.7",
+    "@vitejs/plugin-react": "^5.0.0",
+    "tailwindcss": "^4.1.13",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.0",
+    "vitest": "^3.2.4"
+  }
+}

@@ -1,0 +1,1599 @@
+
+                        <!DOCTYPE html>
+                        <html lang="en">
+                        <head>
+                            <meta charset="UTF-8">
+                            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <style>
+                body {
+                  background-color: white; /* Ensure the iframe has a white background */
+                }
+
+                :root{
+  --bg-0:#050807; --bg-1:#0a0f0d; --bg-2:#0e1512; --bg-3:#141d18; --bg-4:#1b2721;
+  --line:#1e2b24; --line-2:#2a3a31;
+  --tx-0:#e6edf3; --tx-1:#a7b8ae; --tx-2:#6d7d73; --tx-3:#48564e;
+  --grn:#3fb950; --grn-dim:#1f6f34;
+  --red:#ff4444; --org:#ff8c42; --org2:#ff6b35; --yel:#ffb800;
+  --blu:#1f6feb; --gry:#8b949e;
+  --font-mono:'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --r:4px;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--bg-0); color:var(--tx-0);
+  font:12px/1.5 var(--font-mono); letter-spacing:.02em;
+  overflow:hidden;
+}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+input,select{font:inherit;color:var(--tx-0);background:var(--bg-2);border:1px solid var(--line-2);border-radius:var(--r);padding:4px 8px;outline:none}
+input:focus,select:focus{border-color:var(--grn-dim)}
+input::placeholder{color:var(--tx-3)}
+.hidden{display:none!important}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--bg-4);border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:var(--line-2)}
+::selection{background:var(--grn-dim);color:#fff}
+.badge{padding:2px 8px;border:1px solid var(--line-2);border-radius:var(--r);color:var(--tx-1);font-size:10px;letter-spacing:.08em;white-space:nowrap}
+.dot{width:6px;height:6px;border-radius:50%;flex:none}
+
+#app{display:grid;grid-template-rows:46px 34px 1fr 30px;height:100vh}
+#workspace{display:grid;grid-template-columns:1fr 460px;min-height:0}
+#map-section{display:flex;flex-direction:column;min-width:0;border-right:1px solid var(--line)}
+#map-wrap{position:relative;flex:1;min-height:0;background:var(--bg-0)}
+#map2d,#map3d{position:absolute;inset:0}
+#map3d{overflow:hidden}
+#right-rail{display:flex;flex-direction:column;min-height:0;background:var(--bg-1)}
+#rail-bottom{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border-top:1px solid var(--line);flex:1;min-height:0}
+.rail-card{background:var(--bg-1);min-height:0;display:flex;flex-direction:column}
+#news-panel{flex:0 0 46%;border-bottom:1px solid var(--line)}
+#statusbar{display:flex;align-items:center;gap:16px;padding:0 12px;background:var(--bg-1);border-top:1px solid var(--line);font-size:10px;color:var(--tx-2);white-space:nowrap;overflow:hidden}
+#statusbar .sb-brand{color:var(--tx-0);font-weight:700;letter-spacing:.1em}
+#statusbar .sb-links{display:flex;gap:14px;margin-left:auto}
+#statusbar .sb-link{color:var(--tx-2);cursor:pointer}
+#statusbar .sb-link:hover{color:var(--grn)}
+@media (max-width:1100px){
+  #workspace{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) 42vh}
+  #map-section{border-right:none;border-bottom:1px solid var(--line)}
+}
+
+#topbar{display:flex;align-items:center;gap:14px;padding:0 12px;background:var(--bg-1);border-bottom:1px solid var(--line)}
+.tb-left{display:flex;align-items:center;gap:8px}
+.logo-flame{width:18px;height:18px;flex:none}
+.logo-name{font-weight:700;letter-spacing:.14em}
+.ver,.handle{color:var(--tx-2);font-size:10px}
+.live-wrap{display:flex;align-items:center;gap:6px;margin-left:6px}
+.live-dot{width:8px;height:8px;border-radius:50%;background:var(--grn);box-shadow:0 0 8px var(--grn);animation:pulse 2s infinite}
+@keyframes pulse{50%{opacity:.35}}
+.live-txt{font-size:10px;color:var(--grn);letter-spacing:.1em}
+.tb-mid{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
+.badge.mission{border-color:var(--grn-dim);color:var(--grn)}
+.badge.mission::before{content:'●';margin-right:5px;font-size:8px}
+#threat-pct{color:var(--tx-2);font-size:10px}
+.alert-pill{display:flex;align-items:center;gap:6px;padding:2px 10px;border:1px solid var(--org2);border-radius:14px;color:var(--org);font-size:10px;font-weight:700}
+.tb-right{display:flex;align-items:center;gap:8px}
+#search-input{width:190px}
+.tb-btn{padding:4px 10px;border:1px solid var(--line-2);border-radius:var(--r);color:var(--tx-1);font-size:11px}
+.tb-btn:hover{border-color:var(--grn-dim);color:var(--tx-0)}
+.tb-btn.primary{background:var(--grn);border-color:var(--grn);color:#04140a;font-weight:700}
+#tabrow{display:flex;align-items:flex-end;gap:4px;padding:4px 10px 0;background:var(--bg-0);border-bottom:1px solid var(--line)}
+.tab{padding:6px 16px;border:1px solid var(--line);border-bottom:none;border-radius:6px 6px 0 0;color:var(--tx-2);font-size:11px}
+.tab:hover{color:var(--tx-1)}
+.tab.active{background:var(--bg-1);color:var(--grn);border-color:var(--line-2);font-weight:700}
+.tab-add{color:var(--tx-3);padding:0 10px 6px}
+
+#map-header{display:flex;align-items:center;gap:12px;height:34px;padding:0 12px;background:var(--bg-1);border-bottom:1px solid var(--line);font-size:11px;letter-spacing:.1em}
+#situation-title{font-weight:700}
+#clock{color:var(--tx-2);letter-spacing:.06em}
+.mh-spacer{flex:1}
+.mh-toggle{display:flex;border:1px solid var(--line-2);border-radius:var(--r);overflow:hidden}
+.mh-btn{padding:3px 10px;color:var(--tx-2);font-size:10px}
+.mh-btn:hover{color:var(--tx-0)}
+.mh-btn.active{background:var(--grn);color:#04140a;font-weight:700}
+#beta-badge{position:absolute;top:12px;right:52px;z-index:900;padding:2px 10px;border:1px solid var(--blu);color:var(--blu);border-radius:var(--r);font-size:10px;letter-spacing:.12em;background:rgba(10,15,13,.85)}
+.float-panel{position:absolute;z-index:900;background:rgba(10,15,13,.93);border:1px solid var(--line-2);border-radius:6px;backdrop-filter:blur(6px)}
+#timerange{top:12px;left:12px;display:flex;padding:4px;gap:2px}
+.tr-btn{padding:6px 11px;font-size:10px;color:var(--tx-2);border-radius:4px}
+.tr-btn:hover{color:var(--tx-0);background:var(--bg-3)}
+.tr-btn.active{background:var(--grn);color:#04140a;font-weight:700}
+#layer-panel{top:58px;left:12px;width:236px;max-height:calc(100% - 130px);display:flex;flex-direction:column}
+.lp-head{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line);font-size:10px;letter-spacing:.14em;color:var(--tx-1)}
+.lp-caret{color:var(--tx-2);padding:0 4px}
+.lp-search{padding:8px 10px;border-bottom:1px solid var(--line)}
+.lp-search input{width:100%}
+.lp-list{overflow-y:auto;padding:6px}
+#layer-panel.collapsed .lp-list,#layer-panel.collapsed .lp-search,#layer-panel.collapsed .lp-foot{display:none}
+.lp-row{display:flex;align-items:center;gap:8px;padding:6px;border-radius:4px}
+.lp-row:hover{background:var(--bg-3)}
+.lp-row input[type=checkbox]{accent-color:var(--grn);width:14px;height:14px;flex:none;cursor:pointer}
+.lp-ico{width:16px;text-align:center;flex:none}
+.lp-label{flex:1;font-size:10px;letter-spacing:.06em;color:var(--tx-1)}
+.lp-info{width:18px;height:18px;flex:none;border:1px solid var(--line-2);border-radius:50%;color:var(--blu);font-size:10px;line-height:1}
+.lp-info:hover{border-color:var(--blu)}
+.lp-foot{padding:6px 10px;border-top:1px solid var(--line);color:var(--grn);font-size:10px}
+#map-controls{position:absolute;top:12px;right:12px;z-index:900;display:flex;flex-direction:column;gap:4px}
+.mc-btn{width:30px;height:30px;background:rgba(10,15,13,.93);border:1px solid var(--line-2);border-radius:4px;color:var(--tx-1);font-size:14px}
+.mc-btn:hover{color:var(--grn);border-color:var(--grn-dim)}
+#detail-drawer{position:absolute;top:0;right:0;bottom:0;width:344px;z-index:950;background:rgba(10,15,13,.97);border-left:1px solid var(--line-2);padding:14px;overflow-y:auto}
+.dd-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:4px}
+.dd-class{font-size:13px;font-weight:700;letter-spacing:.08em;display:flex;align-items:center;gap:8px}
+.dd-close{color:var(--tx-2);font-size:14px;padding:2px 6px}
+.dd-close:hover{color:var(--red)}
+.dd-sub{color:var(--tx-2);font-size:10px;margin-bottom:10px}
+.conf-bar{height:6px;background:var(--bg-3);border-radius:3px;overflow:hidden;margin:6px 0 12px}
+.conf-fill{height:100%;border-radius:3px}
+.dd-row{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px dashed var(--line);font-size:11px}
+.dd-k{color:var(--tx-2)}
+.dd-v{text-align:right}
+.dd-fac{margin:12px 0;padding:9px;border:1px solid var(--line-2);border-radius:6px;background:var(--bg-2);font-size:11px}
+.dd-fac .f-name{font-weight:700;color:var(--tx-0)}
+.dd-fac .f-meta{color:var(--tx-2);font-size:10px;margin-top:3px}
+.dd-h{font-size:10px;letter-spacing:.12em;color:var(--tx-2);margin:12px 0 6px}
+.dd-actions-list{list-style:none;font-size:11px;color:var(--tx-1)}
+.dd-actions-list li{padding:3px 0 3px 14px;position:relative}
+.dd-actions-list li::before{content:'▸';position:absolute;left:0;color:var(--grn)}
+.dd-actions{display:flex;gap:8px;margin-top:14px}
+.leaflet-container{background:#050807!important;font-family:var(--font-mono)!important}
+.leaflet-control-attribution{background:rgba(5,8,7,.75)!important;color:var(--tx-3)!important;font-size:9px!important}
+.leaflet-control-attribution a{color:var(--tx-2)!important}
+.fac-icon{background:transparent!important;border:none!important}
+.fac-tip{background:var(--bg-2)!important;border:1px solid var(--line-2)!important;color:var(--tx-1)!important;font:10px var(--font-mono)!important;border-radius:4px!important;padding:3px 7px!important;box-shadow:none!important}
+.fac-tip::before{display:none!important}
+.fac-label{background:transparent!important;border:none!important;color:var(--tx-2)!important;font:9px var(--font-mono)!important;text-shadow:0 0 4px #000;white-space:nowrap}
+
+.rail-head{display:flex;align-items:center;gap:8px;padding:9px 10px;border-bottom:1px solid var(--line);font-size:10px;letter-spacing:.14em;color:var(--tx-1);flex:none}
+.rail-head .r-title{font-weight:700;color:var(--tx-0)}
+.rail-head .dot{background:var(--red);box-shadow:0 0 6px var(--red)}
+.rail-head .count{color:var(--red);font-weight:700}
+.rail-head .spacer{flex:1}
+.rh-btn{color:var(--tx-2);padding:0 4px}
+.rh-btn:hover{color:var(--tx-0)}
+.live-badge{padding:2px 9px;border:1px solid var(--grn-dim);color:var(--grn);border-radius:10px;font-size:9px;letter-spacing:.1em}
+.live-badge::before{content:'●';margin-right:4px;font-size:7px}
+#news-sources{display:flex;gap:4px;padding:8px 10px;overflow-x:auto;border-bottom:1px solid var(--line);flex:none;scrollbar-width:none}
+#news-sources::-webkit-scrollbar{display:none}
+.src-chip{flex:none;padding:3px 9px;font-size:9px;letter-spacing:.06em;border:1px solid var(--line-2);border-radius:3px;color:var(--tx-2);cursor:pointer}
+.src-chip:hover{color:var(--tx-1)}
+.src-chip.active{background:var(--red);border-color:var(--red);color:#fff;font-weight:700}
+#news-list{flex:1;overflow-y:auto;padding:8px 10px;display:flex;flex-direction:column;gap:8px}
+.news-item{border:1px solid var(--line);border-radius:6px;padding:8px;background:var(--bg-2)}
+.news-item .ni-top{display:flex;justify-content:space-between;font-size:9px;color:var(--tx-2);margin-bottom:4px}
+.ni-src{font-weight:700}
+.news-item p{font-size:11px;color:var(--tx-1)}
+.news-item p .cite{color:var(--blu)}
+.news-play{margin:0 10px 10px;padding:10px;border:1px dashed var(--line-2);border-radius:6px;text-align:center;color:var(--tx-2);font-size:10px;flex:none}
+.news-play button{margin-top:6px;padding:4px 14px;border:1px solid var(--red);color:var(--red);border-radius:4px;font-size:10px;letter-spacing:.1em}
+.news-play button:hover{background:var(--red);color:#fff}
+#insights-panel{overflow:hidden}
+#insights-body{flex:1;overflow-y:auto;padding:8px}
+.brief{padding:10px;background:var(--bg-2);border:1px solid var(--line);border-left:3px solid var(--blu);border-radius:4px;font-size:11px;color:var(--tx-1)}
+.brief .b-head{display:flex;align-items:center;gap:6px;font-size:10px;letter-spacing:.12em;color:var(--tx-0);font-weight:700;margin-bottom:6px}
+.brief b{color:var(--tx-0)}
+.cite{color:var(--blu)}
+.metric-row{display:grid;grid-template-columns:1fr 1fr 1.4fr;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:6px;overflow:hidden;margin-top:8px}
+.stat{background:var(--bg-1);padding:8px}
+.stat .v{font-size:17px;font-weight:700}
+.stat .k{font-size:9px;color:var(--tx-2);letter-spacing:.06em}
+.stat .v.warn{color:var(--org)}
+#timeline-panel{overflow:hidden}
+#tl-stats{display:grid;grid-template-columns:1fr 1fr 1.4fr;gap:1px;background:var(--line);border-bottom:1px solid var(--line);flex:none}
+#tl-canvas{width:100%;flex:1;min-height:110px;display:block}
+.snap{border:1px solid var(--grn-dim);color:var(--grn);border-radius:10px;padding:2px 9px;font-size:9px;letter-spacing:.08em}
+.snap::before{content:'●';margin-right:4px;font-size:7px}
+
+#toast-stack{position:fixed;right:16px;bottom:44px;z-index:2000;display:flex;flex-direction:column;gap:8px;width:330px}
+.toast{border:1px solid var(--line-2);border-left:4px solid var(--red);background:rgba(14,21,18,.97);border-radius:6px;padding:10px 12px;box-shadow:0 8px 24px rgba(0,0,0,.55);animation:slidein .25s ease}
+@keyframes slidein{from{transform:translateX(24px);opacity:0}}
+.toast .t-close{float:right;color:var(--tx-2);font-size:11px}
+.toast .t-close:hover{color:var(--tx-0)}
+.toast .t-title{font-size:11px;font-weight:700;letter-spacing:.08em}
+.toast .t-msg{font-size:10px;color:var(--tx-1);margin-top:4px}
+#analytics-overlay{position:fixed;inset:0;z-index:1500;background:rgba(5,8,7,.88);backdrop-filter:blur(4px);padding:56px 40px 40px;overflow-y:auto}
+.ao-head{max-width:1200px;margin:0 auto 16px;display:flex;align-items:center;gap:12px}
+.ao-head h2{font-size:14px;letter-spacing:.14em}
+.ao-head .sub{color:var(--tx-2);font-size:10px}
+.ao-close{margin-left:auto;padding:5px 14px;border:1px solid var(--line-2);border-radius:var(--r);color:var(--tx-1)}
+.ao-close:hover{border-color:var(--red);color:var(--red)}
+.ao-grid{max-width:1200px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:14px}
+.ao-card{background:var(--bg-1);border:1px solid var(--line-2);border-radius:8px;padding:14px}
+.ao-card h3{font-size:11px;letter-spacing:.14em;color:var(--tx-1);margin-bottom:10px}
+.ao-table{width:100%;border-collapse:collapse;font-size:10px}
+.ao-table td,.ao-table th{padding:5px 6px;border-bottom:1px solid var(--line);text-align:left;color:var(--tx-1)}
+.ao-table th{color:var(--tx-2);letter-spacing:.08em}
+.ao-legend{display:flex;flex-direction:column;gap:5px;font-size:10px;color:var(--tx-1);margin-top:10px}
+.ao-legend .lg{display:flex;align-items:center;gap:8px}
+.ao-legend .sw{width:10px;height:10px;border-radius:2px;flex:none}
+.ao-legend .val{margin-left:auto;color:var(--tx-0);font-weight:700}
+.ao-bar-row{display:flex;align-items:center;gap:8px;font-size:10px;color:var(--tx-1);padding:4px 0}
+.ao-bar{flex:1;height:8px;background:var(--bg-3);border-radius:4px;overflow:hidden}
+.ao-bar > div{height:100%;background:var(--blu)}
+
+
+              </style>
+                        </head>
+                        <body>
+                            <!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>ThermoWatch — Industrial Fire & Thermal Anomaly Monitor</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='13' font-size='13'%3E%F0%9F%94%A5%3C/text%3E%3C/svg%3E"/>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/fontsource/css/jetbrains-mono@latest/index.css"/>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/fontsource/css/jetbrains-mono@latest/700.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="css/variables.css"/>
+<link rel="stylesheet" href="css/base.css"/>
+<link rel="stylesheet" href="css/layout.css"/>
+<link rel="stylesheet" href="css/components/topbar.css"/>
+<link rel="stylesheet" href="css/components/map.css"/>
+<link rel="stylesheet" href="css/components/sidebar.css"/>
+<link rel="stylesheet" href="css/components/overlays.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+</head>
+<body>
+<div id="app">
+  <header id="topbar"></header>
+  <nav id="tabrow"></nav>
+
+  <main id="workspace">
+    <section id="map-section">
+      <div id="map-header">
+        <span id="situation-title">INDIA SITUATION</span>
+        <span id="clock">—</span>
+        <span class="mh-spacer"></span>
+        <div class="mh-toggle">
+          <button id="btn-2d" class="mh-btn active">2D</button>
+          <button id="btn-3d" class="mh-btn">3D</button>
+        </div>
+        <button id="btn-split" class="mh-btn icon" title="Split view (demo)">▥</button>
+        <button id="btn-fs" class="mh-btn icon" title="Fullscreen">⛶</button>
+      </div>
+
+      <div id="map-wrap">
+        <div id="map2d"></div>
+        <div id="map3d" class="hidden"></div>
+        <div id="timerange" class="float-panel"></div>
+        <aside id="layer-panel" class="float-panel"></aside>
+        <div id="map-controls">
+          <button id="mc-zin"  class="mc-btn" title="Zoom in">+</button>
+          <button id="mc-zout" class="mc-btn" title="Zoom out">−</button>
+          <button id="mc-home" class="mc-btn" title="Reset view">⌂</button>
+        </div>
+        <span id="beta-badge" class="hidden">BETA</span>
+        <div id="detail-drawer" class="hidden"></div>
+      </div>
+    </section>
+
+    <aside id="right-rail">
+      <section id="news-panel" class="rail-card"></section>
+      <div id="rail-bottom">
+        <section id="insights-panel" class="rail-card"></section>
+        <section id="timeline-panel" class="rail-card"></section>
+      </div>
+    </aside>
+  </main>
+
+  <footer id="statusbar"></footer>
+</div>
+
+<div id="toast-stack"></div>
+<div id="analytics-overlay" class="hidden"></div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
+
+
+              <script>
+                              // js/config.js — global constants & design tokens for the console
+export const CONFIG = {
+  appName: 'THERMOWATCH',
+  version: 'v2.10.0',
+  handle: '@sih26162',
+  earthTexture: 'https://image.qwenlm.ai/public_source/98dfc6f4-5f5f-4337-bb11-7546436860b9/128e61377-7b39-4a35-92a3-57cbe6ebf7fb.png',
+  // texture crop (avoids white margin / rounded corners of source asset)
+  earthTextureCrop: { rx: 0.88, ry: 0.53, ox: 0.06, oy: 0.24 },
+
+  colors: {
+    industrial_fire:   '#ff4444',
+    persistent_thermal:'#ff8c42',
+    wildfire:          '#3fb950',
+    agricultural:      '#ffb800',
+    unknown:           '#8b949e'
+  },
+  classNames: {
+    industrial_fire:   'INDUSTRIAL FIRE',
+    persistent_thermal:'PERSISTENT THERMAL SOURCE',
+    wildfire:          'WILDFIRE',
+    agricultural:      'AGRICULTURAL BURN',
+    unknown:           'UNCLASSIFIED'
+  },
+  classOrder: ['industrial_fire','persistent_thermal','wildfire','agricultural','unknown'],
+
+  tiers: [ // descending thresholds — first match wins
+    { min: 80, label: 'CRITICAL', color: '#ff4444' },
+    { min: 60, label: 'HIGH',     color: '#ff6b35' },
+    { min: 40, label: 'ELEVATED', color: '#ffb800' },
+    { min: 20, label: 'GUARD',    color: '#3fb950' },
+    { min: 0,  label: 'LOW',      color: '#8b949e' }
+  ],
+
+  ranges: {
+    '1h': 3.6e6, '6h': 2.16e7, '24h': 8.64e7,
+    '48h': 1.728e8, '7d': 6.048e8, 'ALL': Infinity
+  },
+
+  regions: {
+    INDIA:      { bbox: [6, 68, 37, 98],     center: [22.5, 79],  zoom: 5 },
+    SOUTH_ASIA: { bbox: [-12, 60, 40, 105],  center: [18, 82],    zoom: 4 },
+    GLOBAL:     { bbox: [-60, -180, 85, 180],center: [24, 40],    zoom: 3 }
+  },
+
+  liveIntervalMs: 7000,
+  persistMinDays: 5,
+  facilityLinkKm: 6
+};
+
+// js/core/eventbus.js — minimal pub/sub bus
+class Bus {
+  constructor(){ this.m = new Map(); }
+  on(topic, fn){ if(!this.m.has(topic)) this.m.set(topic, []); this.m.get(topic).push(fn); return () => this.off(topic, fn); }
+  off(topic, fn){ const a = this.m.get(topic) || []; this.m.set(topic, a.filter(f => f !== fn)); }
+  emit(topic, payload){ (this.m.get(topic) || []).slice().forEach(fn => fn(payload)); }
+}
+export const bus = new Bus();
+
+// js/core/store.js — global state + selectors
+import { CONFIG } from '../config.js';
+
+export const state = {
+  region: 'INDIA',
+  range: '7d',
+  mode: '2d',
+  overlay: null,          // null | 'analytics'
+  selected: null,         // event id
+  layers: { hotspots:true, facilities:true, persistent:true, agri:true, wildfire:true, risk:false, labels:false },
+  events: [],
+  facilities: [],
+  alerts: 0,
+  threat: { level: 5, label: 'THREATCON 5', color: '#3fb950', pct: 8 }
+};
+
+const listeners = new Set();
+export function setState(patch){ Object.assign(state, patch); listeners.forEach(fn => fn(state)); }
+export function subscribe(fn){ listeners.add(fn); return () => listeners.delete(fn); }
+
+export function visibleEvents(st = state){
+  const box = CONFIG.regions[st.region].bbox;
+  const span = CONFIG.ranges[st.range];
+  const now = Date.now();
+  return st.events.filter(e =>
+    e.lat >= box[0] && e.lat <= box[2] &&
+    e.lon >= box[1] && e.lon <= box[3] &&
+    (span === Infinity || now - e.ts <= span)
+  );
+}
+
+// js/utils/dom.js
+export const $  = (s, r = document) => r.querySelector(s);
+export const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+export function el(tag, cls, html){
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (html != null) n.innerHTML = html;
+  return n;
+}
+
+// js/utils/format.js
+export const MON = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+export const WD  = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+const p2 = n => String(n).padStart(2, '0');
+
+export function fmtUTC(d = new Date()){
+  return `${WD[d.getUTCDay()]}, ${p2(d.getUTCDate())} ${MON[d.getUTCMonth()]} ${d.getUTCFullYear()} ` +
+         `${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}:${p2(d.getUTCSeconds())} UTC`;
+}
+export function fmtHM(ts){ const d = new Date(ts); return `${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())} UTC`; }
+export function fmtDay(ts){ const d = new Date(ts); return `${p2(d.getUTCDate())}/${p2(d.getUTCMonth()+1)}`; }
+export function timeAgo(ts){
+  const s = Math.max(1, (Date.now() - ts) / 1000);
+  if (s < 60) return `${s|0}s ago`;
+  if (s < 3600) return `${s/60|0}m ago`;
+  if (s < 86400) return `${s/3600|0}h ago`;
+  return `${s/86400|0}d ago`;
+}
+export const fmtInt = n => n.toLocaleString('en-US');
+
+// js/utils/geo.js — seeded rng + geo helpers
+export function mulberry32(a){
+  return function(){
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+export const gauss = rng => (rng() + rng() + rng() - 1.5) / 1.5;
+
+export function haversineKm(aLat, aLon, bLat, bLon){
+  const R = 6371, dr = Math.PI / 180;
+  const dLa = (bLat - aLat) * dr, dLo = (bLon - aLon) * dr;
+  const s = Math.sin(dLa/2)**2 + Math.cos(aLat*dr) * Math.cos(bLat*dr) * Math.sin(dLo/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+// ~5 km aggregation cell (stands in for H3 res-7 in the demo pipeline)
+export const cellKey = (lat, lon) => `${lat.toFixed(2)}|${lon.toFixed(2)}`;
+
+export function nearestFacility(facs, lat, lon){
+  let best = null, bd = Infinity;
+  for (const f of facs){
+    const d = haversineKm(lat, lon, f.lat, f.lon);
+    if (d < bd){ bd = d; best = f; }
+  }
+  return { fac: best, d: bd };
+}
+// Indo-Gangetic stubble-burn belt (Punjab / Haryana / W. UP)
+export const inAgBelt = (lat, lon) => lat > 28.8 && lat < 32.6 && lon > 72.5 && lon < 78.8;
+
+// js/data/facilities.js — OSM-style industrial facility registry (simulated extract)
+export const FACILITIES = [
+  // ── India ──────────────────────────────────────────────────────────────
+  { id:'F01', name:'Reliance Jamnagar Refinery Complex',   type:'refinery', lat:22.470, lon:69.920, hazard:5, persistent:true,  region:'IN' },
+  { id:'F02', name:'Tata Steel Jamshedpur Works',          type:'steel',    lat:22.800, lon:86.200, hazard:5, persistent:true,  region:'IN' },
+  { id:'F03', name:'Vedanta Aluminium Jharsuguda Smelter', type:'smelter',  lat:21.870, lon:84.020, hazard:4, persistent:true,  region:'IN' },
+  { id:'F04', name:'ACC Cement Wadi Works',                type:'cement',   lat:17.660, lon:76.980, hazard:3, persistent:true,  region:'IN' },
+  { id:'F05', name:'NTPC Vindhyachal Super Thermal',       type:'power',    lat:24.020, lon:82.720, hazard:4, persistent:true,  region:'IN' },
+  { id:'F06', name:'ONGC Uran Gas Processing Plant',       type:'gas',      lat:18.890, lon:72.940, hazard:4, persistent:false, region:'IN' },
+  { id:'F07', name:'Hazira Petrochemical Complex',         type:'chemical', lat:21.120, lon:72.620, hazard:4, persistent:false, region:'IN' },
+  { id:'F08', name:'Ghazipur Waste-to-Energy Incinerator', type:'waste',    lat:28.620, lon:77.320, hazard:3, persistent:true,  region:'IN' },
+  { id:'F09', name:'KG Basin Onshore Flare Cluster',       type:'flare',    lat:16.950, lon:82.250, hazard:4, persistent:true,  region:'IN' },
+  { id:'F10', name:'JSW Steel Vijayanagar Plant',          type:'steel',    lat:15.180, lon:76.050, hazard:4, persistent:true,  region:'IN' },
+  { id:'F11', name:'IOCL Panipat Refinery',                type:'refinery', lat:29.700, lon:76.980, hazard:5, persistent:false, region:'IN' },
+  { id:'F12', name:'Bokaro Steel Thermal Power Station',   type:'power',    lat:23.780, lon:85.970, hazard:4, persistent:true,  region:'IN' },
+  { id:'F13', name:'CPCL Manali Refinery, Chennai',        type:'refinery', lat:13.160, lon:80.260, hazard:4, persistent:false, region:'IN' },
+  { id:'F14', name:'Hindalco Renukoot Aluminium Smelter',  type:'smelter',  lat:24.220, lon:83.030, hazard:3, persistent:true,  region:'IN' },
+  { id:'F15', name:'Okha Cement Grinding Unit',            type:'cement',   lat:22.240, lon:69.070, hazard:2, persistent:false, region:'IN' },
+  // ── Global reference sites ────────────────────────────────────────────
+  { id:'G01', name:'Ras Tanura Refinery (Saudi Aramco)',   type:'refinery', lat:26.660, lon:50.150, hazard:5, persistent:true,  region:'GL' },
+  { id:'G02', name:'Baosteel Shanghai Works',              type:'steel',    lat:31.400, lon:121.400,hazard:4, persistent:true,  region:'GL' },
+  { id:'G03', name:'Niger Delta Flare Field (NNPC)',       type:'flare',    lat:5.050,  lon:6.550,  hazard:4, persistent:true,  region:'GL' },
+  { id:'G04', name:'Karachi Steel Mills',                  type:'steel',    lat:24.830, lon:67.200, hazard:3, persistent:false, region:'GL' },
+  { id:'G05', name:'Payra Thermal Power (Bangladesh)',     type:'power',    lat:22.400, lon:90.500, hazard:3, persistent:true,  region:'GL' },
+  { id:'G06', name:'Colombo Waste Incinerator',            type:'waste',    lat:6.930,  lon:79.850, hazard:2, persistent:false, region:'GL' }
+];
+
+// js/data/firms.js — simulated NASA FIRMS MODIS/VIIRS active-fire feed (seeded)
+import { mulberry32, gauss } from '../utils/geo.js';
+
+const rng = mulberry32(26162);
+const FRP_PROFILE = {
+  refinery:[260,90], steel:[120,40], smelter:[200,60], cement:[90,25], power:[70,20],
+  gas:[180,60], chemical:[150,70], waste:[45,15], flare:[620,140]
+};
+const WF_CLUSTERS = [
+  [30.42,79.55],[21.60,80.40],[13.90,76.60],[31.90,77.30],
+  [-5.60,-60.20],[39.20,-120.60],[2.10,103.40]
+];
+let seq = 0;
+
+function mkEvent(lat, lon, frp, ts, extra = {}){
+  const brightness = 300 + frp * 0.4 + gauss(rng) * 8;
+  const confidence = Math.max(30, Math.min(100, Math.round(55 + frp / 12 + rng() * 25)));
+  return {
+    id: 'E' + String(++seq).padStart(5, '0'),
+    lat: +lat.toFixed(4), lon: +lon.toFixed(4),
+    frp: +frp.toFixed(1), brightness: +brightness.toFixed(1),
+    confidence,
+    daynight: rng() < 0.5 ? 'D' : 'N',
+    satellite: rng() < 0.62 ? 'VIIRS-SNPP' : 'MODIS-AQUA',
+    ts, ...extra
+  };
+}
+
+export function buildHistoricalEvents(facs){
+  const now = Date.now();
+  const evts = [];
+
+  for (const f of facs){
+    const [mu, sd] = FRP_PROFILE[f.type];
+    const days = f.persistent ? 10 + Math.floor(rng() * 5) : 1 + Math.floor(rng() * 3);
+    for (let d = 0; d < days; d++){
+      const n = 1 + Math.floor(rng() * 3);
+      for (let k = 0; k < n; k++){
+        const frp = Math.max(8, mu + gauss(rng) * sd * (f.persistent ? 0.35 : 1));
+        const ts = now - d * 86400000 - Math.floor(rng() * 20) * 3600000;
+        evts.push(mkEvent(f.lat + gauss(rng)*0.012, f.lon + gauss(rng)*0.012, frp, ts, { facilityId: f.id }));
+      }
+    }
+  }
+  for (const [cla, clon] of WF_CLUSTERS){
+    const days = 1 + Math.floor(rng() * 3);
+    const n = 8 + Math.floor(rng() * 10);
+    for (let i = 0; i < n; i++){
+      const d = Math.floor(rng() * days);
+      evts.push(mkEvent(cla + gauss(rng)*0.30, clon + gauss(rng)*0.30, 25 + rng()*120,
+        now - d*86400000 - Math.floor(rng()*22)*3600000, {}));
+    }
+  }
+  for (let i = 0; i < 46; i++){ // Punjab/Haryana residue burning
+    const d = Math.floor(rng() * 4);
+    evts.push(mkEvent(30.9 + gauss(rng)*0.45, 75.8 + gauss(rng)*0.45, 18 + rng()*60,
+      now - d*86400000 - Math.floor(rng()*10)*3600000, {}));
+  }
+  for (let i = 0; i < 14; i++){ // scattered unclassified
+    evts.push(mkEvent(8 + rng()*28, 70 + rng()*26, 12 + rng()*40,
+      now - Math.floor(rng()*6)*86400000 - Math.floor(rng()*23)*3600000, {}));
+  }
+  return evts.sort((a, b) => b.ts - a.ts);
+}
+
+export function spawnLiveEvent(events, facs){
+  const r = rng();
+  const persistentPool = events.filter(e => (e.consecutiveDays || 0) >= 3 && e.facilityId);
+  if (r < 0.5 && persistentPool.length){
+    const base = persistentPool[Math.floor(rng() * persistentPool.length)];
+    const f = facs.find(x => x.id === base.facilityId);
+    const [mu, sd] = FRP_PROFILE[f.type];
+    return mkEvent(f.lat + gauss(rng)*0.012, f.lon + gauss(rng)*0.012,
+      Math.max(8, mu + gauss(rng)*sd*0.3), Date.now(), { facilityId: f.id });
+  }
+  if (r < 0.75){
+    const c = WF_CLUSTERS[Math.floor(rng() * 4)];
+    return mkEvent(c[0] + gauss(rng)*0.3, c[1] + gauss(rng)*0.3, 25 + rng()*110, Date.now(), {});
+  }
+  if (r < 0.9){
+    return mkEvent(30.9 + gauss(rng)*0.45, 75.8 + gauss(rng)*0.45, 18 + rng()*55, Date.now(), {});
+  }
+  const f = facs[Math.floor(rng() * facs.length)];
+  return mkEvent(f.lat + gauss(rng)*0.05, f.lon + gauss(rng)*0.05, 30 + rng()*120, Date.now(), { facilityId: f.id });
+}
+
+// js/data/news.js — simulated wire headline pool
+export const NEWS_POOL = [
+  { src:'PTI',    text:'Fire breaks out at chemical storage unit in Hazira industrial belt; SDRF teams on site, no casualties reported.' },
+  { src:'REUTERS',text:'Satellite thermal anomalies over Jamnagar refinery complex under review; operator states flaring within consent limits.' },
+  { src:'NDTV',   text:'Stubble-burn counts rise across Punjab districts; GRAPM stage-II advisory issued for NCR downwind corridor.' },
+  { src:'THE HINDU', text:'Forest dept confirms Uttarakhand ridge fire; satellite passes show cluster growth over 48 hours.' },
+  { src:'BLOOMBERG', text:'Steel-sector thermal emissions scrutiny rises as persistent hotspots flagged in Odisha belt.' },
+  { src:'PTI',    text:'CPCB directs state boards to cross-check OCEMS telemetry against chronic thermal source list.' },
+  { src:'ALJAZEERA', text:'Niger Delta gas-flare intensity among highest globally per night-time thermal profiling.' },
+  { src:'REUTERS', text:'Amazon fire front advances; satellite FRP readings spike across Mato Grosso corridor.' },
+  { src:'INDIAN EXPRESS', text:'Jamshedpur works fire drill activated after thermal alert; plant safety cell verifies all zones clear.' },
+  { src:'PTI',    text:'Waste-to-energy plant emission spike probed after repeated thermal detections over Ghazipur.' },
+  { src:'BBC',    text:'California wildfire smoke plume tracked across county lines; evacuation warnings extended.' },
+  { src:'THE HINDU', text:'KG basin onshore flare cluster logged as persistent thermal source in quarterly thermal audit.' },
+  { src:'NDTV',   text:'Vindhyachal super thermal unit tripped; thermal signature normalises within six hours, says NTPC.' },
+  { src:'REUTERS', text:'Karachi steel mills furnace incident contained; satellite revisit confirms cooling trend.' }
+];
+
+// js/features/persistence/persistence.js — consecutive-day streak intelligence
+import { cellKey } from '../../utils/geo.js';
+
+const dayNum = ts => Math.floor(ts / 86400000);
+
+export function computeStreaks(events){
+  const byCell = new Map();
+  for (const e of events){
+    const k = cellKey(e.lat, e.lon);
+    if (!byCell.has(k)) byCell.set(k, new Set());
+    byCell.get(k).add(dayNum(e.ts));
+  }
+  for (const e of events){
+    const days = byCell.get(cellKey(e.lat, e.lon));
+    let s = 1, t = dayNum(e.ts);
+    while (days.has(t - 1)){ s++; t--; }
+    e.consecutiveDays = s;
+  }
+}
+
+export function persistentCells(events, minDays = 5){
+  const m = new Map();
+  for (const e of events){
+    if ((e.consecutiveDays || 0) >= minDays){
+      const k = cellKey(e.lat, e.lon);
+      const cur = m.get(k) || { key:k, lat:e.lat, lon:e.lon, count:0, maxDays:0 };
+      cur.count++; cur.maxDays = Math.max(cur.maxDays, e.consecutiveDays);
+      m.set(k, cur);
+    }
+  }
+  return [...m.values()].sort((a, b) => b.maxDays - a.maxDays);
+}
+
+// js/features/classification/classifier.js — transparent rule-ensemble standing in
+// for the XGBoost multi-class model (same feature family: FRP, brightness, persistence
+// streak, OSM facility proximity + hazard, agro-belt geography).
+import { inAgBelt } from '../../utils/geo.js';
+
+export function classify(evt, facHit){
+  const { fac, d } = facHit;
+  const pers = evt.consecutiveDays || 1;
+  const s = { industrial_fire:0.05, persistent_thermal:0.05, wildfire:0.10, agricultural:0.05, unknown:0.15 };
+
+  if (fac && d < 6){
+    const prox = 1 - d / 6;
+    s.industrial_fire += 2.6 * prox * (fac.hazard / 5);
+    if (pers >= 5) s.persistent_thermal += 2.2 + Math.min(pers, 14) * 0.08;
+    if (fac.type === 'flare' || fac.type === 'cement' || fac.type === 'waste') s.persistent_thermal += 0.9 * prox;
+    if (fac.type === 'refinery' || fac.type === 'chemical') s.industrial_fire += 0.8 * prox;
+  } else {
+    if (inAgBelt(evt.lat, evt.lon)) s.agricultural += 2.8;
+    else s.wildfire += 2.2;
+    if (evt.frp < 60) s.wildfire += 0.3;
+  }
+  if (pers >= 5 && !(fac && d < 6)) s.persistent_thermal += 0.8;
+
+  const total = Object.values(s).reduce((a, b) => a + b, 0);
+  let cls = 'unknown', mx = 0;
+  for (const k in s) if (s[k] > mx){ mx = s[k]; cls = k; }
+  const confidence = +Math.min(0.97, 0.5 + 0.5 * (mx / total)).toFixed(2);
+  return { cls, confidence };
+}
+
+// js/features/risk/risk.js — 0-100 risk score + tier
+import { CONFIG } from '../../config.js';
+
+export function riskOf(evt, facHit){
+  const { fac, d } = facHit;
+  const frpN  = Math.min(1, evt.frp / 700);
+  const brN   = Math.min(1, Math.max(0, (evt.brightness - 300) / 250));
+  const persN = Math.min(1, (evt.consecutiveDays || 1) / 14);
+  const haz   = fac ? fac.hazard / 5 : 0.15;
+  const prox  = (fac && d < 6) ? (1 - d / 6) : 0;
+  const score = Math.min(100, Math.round(100 * (0.34*frpN + 0.12*brN + 0.18*persN + 0.22*haz + 0.14*prox)));
+  const tier  = CONFIG.tiers.find(t => score >= t.min) || CONFIG.tiers[CONFIG.tiers.length - 1];
+  return { score, tier };
+}
+
+// js/core/pipeline.js — enrichment pipeline: persistence → classification → risk
+import { computeStreaks } from '../features/persistence/persistence.js';
+import { classify } from '../features/classification/classifier.js';
+import { riskOf } from '../features/risk/risk.js';
+import { nearestFacility } from '../utils/geo.js';
+import { CONFIG } from '../config.js';
+
+function annotate(evt, facs){
+  const fh = nearestFacility(facs, evt.lat, evt.lon);
+  const linked = fh.d < CONFIG.facilityLinkKm ? fh.fac : null;
+  const c = classify(evt, fh);
+  const r = riskOf(evt, fh);
+  Object.assign(evt, c, r, { facility: linked, facDistKm: +fh.d.toFixed(2) });
+  return evt;
+}
+
+export function enrichAll(events, facs){
+  computeStreaks(events);
+  events.forEach(e => annotate(e, facs));
+  return events;
+}
+
+export function enrichOne(evt, events, facs){
+  computeStreaks([...events, evt]);
+  return annotate(evt, facs);
+}
+
+// js/features/map/markers.js — Leaflet marker factories
+import { CONFIG } from '../../config.js';
+
+export function eventMarker(evt, selected){
+  const m = L.circleMarker([evt.lat, evt.lon], {
+    radius: selected ? 7 : 3 + Math.min(6, evt.frp / 120),
+    color: selected ? '#ffffff' : CONFIG.colors[evt.cls],
+    weight: selected ? 2 : 1,
+    fillColor: CONFIG.colors[evt.cls],
+    fillOpacity: 0.85,
+    opacity: selected ? 1 : 0.9
+  });
+  m._evtId = evt.id;
+  return m;
+}
+
+export function facilityMarker(fac){
+  const icon = L.divIcon({
+    className: 'fac-icon',
+    html: `<svg viewBox="0 0 16 16" width="14" height="14"><path d="M1 14V6l4 3V6l4 3V6l6 4v4z" fill="#9fb0a6" stroke="#0a0f0d" stroke-width="0.6"/></svg>`,
+    iconSize: [14, 14], iconAnchor: [7, 7]
+  });
+  const m = L.marker([fac.lat, fac.lon], { icon });
+  m.bindTooltip(`${fac.name} · ${fac.type.toUpperCase()}`, { direction:'top', className:'fac-tip', opacity:0.95 });
+  m._facId = fac.id;
+  return m;
+}
+
+export function facilityLabel(fac){
+  const icon = L.divIcon({ className:'fac-label', html: fac.name.split(' ')[0].toUpperCase(), iconSize:[90,12], iconAnchor:[-8,6] });
+  return L.marker([fac.lat, fac.lon], { icon, interactive:false });
+}
+
+export function persistRing(evt){
+  return L.circleMarker([evt.lat, evt.lon], {
+    radius: 10, stroke:true, color:'#ff8c42', weight:1, dashArray:'3 3', fill:false, opacity:0.8, interactive:false
+  });
+}
+
+export function riskHalo(evt){
+  return L.circle([evt.lat, evt.lon], {
+    radius: 25000, stroke:false, fill:true, fillColor: evt.tier.color, fillOpacity:0.10, interactive:false
+  });
+}
+
+export function wildfireZone(evt){
+  return L.circle([evt.lat, evt.lon], {
+    radius: 9000, stroke:true, color:'#3fb950', weight:1, opacity:0.35,
+    fill:true, fillColor:'#3fb950', fillOpacity:0.08, interactive:false
+  });
+}
+
+// js/features/map/map2d.js — Leaflet dark tactical map + layer groups
+import { state, subscribe, setState } from '../../core/store.js';
+import { bus } from '../../core/eventbus.js';
+import { CONFIG } from '../../config.js';
+import { cellKey } from '../../utils/geo.js';
+import { eventMarker, facilityMarker, facilityLabel, persistRing, riskHalo, wildfireZone } from './markers.js';
+
+let map = null, groups = {}, facMarkers = [], labelMarkers = [];
+let prevLayers = null, prevRegion = null;
+
+export function init(el){
+  map = L.map(el, { zoomControl:false, minZoom:3, maxZoom:12, worldCopyJump:true });
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© OpenStreetMap © CARTO', subdomains: 'abcd', maxZoom: 19
+  }).addTo(map);
+
+  for (const k of ['risk','wildfire','persistent','facilities','labels','hotspots']){
+    groups[k] = L.layerGroup().addTo(map);
+  }
+  home(true);
+
+  groups.hotspots.eachLayer?.(() => {});
+  bus.on('map:fly', p => map.flyTo([p.lat, p.lon], p.zoom || 8, { duration: 1.1 }));
+
+  subscribe(s => {
+    if (s.layers !== prevLayers){ prevLayers = s.layers; applyLayers(s.layers); }
+    if (s.region !== prevRegion){ prevRegion = s.region; home(true); }
+  });
+  prevLayers = state.layers; prevRegion = state.region;
+  applyLayers(state.layers);
+  setTimeout(() => map.invalidateSize(), 120);
+}
+
+export function home(instant){
+  const r = CONFIG.regions[state.region];
+  if (instant) map.setView(r.center, r.zoom, { animate:false });
+  else map.flyTo(r.center, r.zoom, { duration: 1.0 });
+}
+export const zoomIn  = () => map.zoomIn();
+export const zoomOut = () => map.zoomOut();
+export const invalidate = () => map.invalidateSize();
+
+function applyLayers(layers){
+  for (const k in groups){
+    if (layers[k]) { if (!map.hasLayer(groups[k])) map.addLayer(groups[k]); }
+    else if (map.hasLayer(groups[k])) map.removeLayer(groups[k]);
+  }
+}
+
+export function setEvents(events){
+  for (const k in groups) groups[k].clearLayers();
+
+  if (!facMarkers.length){
+    facMarkers = state.facilities.map(facilityMarker);
+    labelMarkers = state.facilities.map(facilityLabel);
+  }
+  facMarkers.forEach(m => groups.facilities.addLayer(m));
+  labelMarkers.forEach(m => groups.labels.addLayer(m));
+
+  const seenCells = new Set();
+  for (const e of events){
+    if (e.cls === 'agricultural'){
+      if (state.layers.agri) groups.hotspots.addLayer(eventMarker(e, e.id === state.selected));
+    } else if (e.cls === 'wildfire'){
+      if (e.frp > 60) groups.wildfire.addLayer(wildfireZone(e));
+      groups.hotspots.addLayer(eventMarker(e, e.id === state.selected));
+    } else {
+      groups.hotspots.addLayer(eventMarker(e, e.id === state.selected));
+    }
+    if ((e.consecutiveDays || 0) >= CONFIG.persistMinDays){
+      const k = cellKey(e.lat, e.lon);
+      if (!seenCells.has(k)){ seenCells.add(k); groups.persistent.addLayer(persistRing(e)); }
+    }
+    if (e.score >= 60) groups.risk.addLayer(riskHalo(e));
+  }
+  // marker click → select
+  groups.hotspots.eachLayer(m => {
+    if (m._evtId) m.on('click', () => setState({ selected: m._evtId }));
+  });
+}
+
+// js/features/map/map3d.js — Three.js globe with thermal event point cloud
+import * as THREE from 'three';
+import { CONFIG } from '../../config.js';
+import { setState } from '../../core/store.js';
+
+let renderer, scene, camera, globe, pointsObj = null;
+let raf = 0, inited = false, container = null, eventsCache = [];
+const raycaster = new THREE.Raycaster();
+raycaster.params.Points = { threshold: 0.03 };
+
+function llToVec3(lat, lon, r){
+  const la = lat * Math.PI / 180, lo = lon * Math.PI / 180;
+  return [ r * Math.cos(la) * Math.cos(lo), r * Math.sin(la), -r * Math.cos(la) * Math.sin(lo) ];
+}
+
+export function init(el){
+  container = el;
+  if (inited) return;
+  inited = true;
+
+  renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
+  renderer.setPixelRatio(window.devicePixelRatio || 1);
+  container.appendChild(renderer.domElement);
+
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+  camera.position.z = 3.1;
+
+  const mat = new THREE.MeshBasicMaterial({ color: 0x6a4a34 });
+  new THREE.TextureLoader().load(CONFIG.earthTexture, tex => {
+    const c = CONFIG.earthTextureCrop;
+    tex.repeat.set(c.rx, c.ry); tex.offset.set(c.ox, c.oy);
+    tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+    tex.colorSpace = THREE.SRGBColorSpace;
+    mat.map = tex; mat.color.set(0xffffff); mat.needsUpdate = true;
+  });
+  globe = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 48), mat);
+  scene.add(globe);
+
+  const wire = new THREE.Mesh(
+    new THREE.SphereGeometry(1.002, 24, 24),
+    new THREE.MeshBasicMaterial({ color:0x3fb950, wireframe:true, transparent:true, opacity:0.05 })
+  );
+  globe.add(wire);
+  const atmo = new THREE.Mesh(
+    new THREE.SphereGeometry(1.07, 32, 32),
+    new THREE.MeshBasicMaterial({ color:0x3fb950, transparent:true, opacity:0.06, side:THREE.BackSide })
+  );
+  scene.add(atmo);
+
+  const fit = () => {
+    const w = container.clientWidth || 1, h = container.clientHeight || 1;
+    renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
+  };
+  fit();
+  new ResizeObserver(fit).observe(container);
+
+  renderer.domElement.addEventListener('click', ev => {
+    if (!pointsObj) return;
+    const r = renderer.domElement.getBoundingClientRect();
+    const ndc = new THREE.Vector2(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
+    raycaster.setFromCamera(ndc, camera);
+    const hits = raycaster.intersectObject(pointsObj);
+    if (hits.length) setState({ selected: eventsCache[hits[0].index].id });
+  });
+
+  setEvents(eventsCache);
+  startLoop();
+}
+
+function loop(){
+  raf = requestAnimationFrame(loop);
+  globe.rotation.y += 0.0012;
+  renderer.render(scene, camera);
+}
+function startLoop(){ if (!raf) loop(); }
+function stopLoop(){ if (raf){ cancelAnimationFrame(raf); raf = 0; } }
+
+export function setEvents(events){
+  eventsCache = events;
+  if (!inited) return;
+  if (pointsObj){ globe.remove(pointsObj); pointsObj.geometry.dispose(); pointsObj = null; }
+  const n = events.length;
+  if (!n) return;
+  const pos = new Float32Array(n * 3), col = new Float32Array(n * 3);
+  const c = new THREE.Color();
+  events.forEach((e, i) => {
+    pos.set(llToVec3(e.lat, e.lon, 1.012), i * 3);
+    c.set(CONFIG.colors[e.cls] || '#8b949e');
+    col.set([c.r, c.g, c.b], i * 3);
+  });
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  pointsObj = new THREE.Points(g, new THREE.PointsMaterial({ size:0.02, vertexColors:true, transparent:true, opacity:0.95 }));
+  globe.add(pointsObj);
+}
+
+export function show(){ container.classList.remove('hidden'); startLoop(); }
+export function hide(){ container.classList.add('hidden'); stopLoop(); }
+export function zoomIn(){ camera.position.z = Math.max(1.6, camera.position.z - 0.3); }
+export function zoomOut(){ camera.position.z = Math.min(6, camera.position.z + 0.3); }
+
+// js/features/map/layers.js — LAYERS float panel (definitions + UI + wiring)
+import { $, el } from '../../utils/dom.js';
+import { state, setState } from '../../core/store.js';
+import { bus } from '../../core/eventbus.js';
+
+export const LAYER_DEFS = [
+  { key:'hotspots',   icon:'🔥', label:'FIRMS HOTSPOTS',             info:'NASA FIRMS MODIS/VIIRS active thermal anomalies, colour-coded by ML class.' },
+  { key:'facilities', icon:'🏭', label:'OSM INDUSTRIAL SITES',       info:'OpenStreetMap industrial facilities: refinery, steel, cement, flare, power, smelter.' },
+  { key:'persistent', icon:'♨️', label:'PERSISTENT THERMAL SOURCES', info:'Aggregation cells with ≥5 consecutive detection days — chronic thermal sources.' },
+  { key:'agri',       icon:'🌾', label:'AGRICULTURAL BURNS',         info:'Residue / stubble burn detections across the Indo-Gangetic belt.' },
+  { key:'wildfire',   icon:'🌲', label:'WILDFIRE ZONES',             info:'Vegetation-fire clusters with 9 km spread halo.' },
+  { key:'risk',       icon:'⚠️', label:'RISK HALOS',                 info:'25 km halo around HIGH / CRITICAL risk-scored events.' },
+  { key:'labels',     icon:'🏷️', label:'FACILITY LABELS',            info:'Permanent name labels for OSM industrial facilities.' }
+];
+
+export function init(){
+  const panel = $('#layer-panel');
+  panel.innerHTML = `
+    <div class="lp-head"><span>LAYERS</span><button class="lp-caret" title="Collapse">▾</button></div>
+    <div class="lp-search"><input id="lp-search" placeholder="Search layers..."/></div>
+    <div class="lp-list"></div>
+    <div class="lp-foot">© ThermoWatch · FIRMS + OSM</div>`;
+  const list = $('.lp-list', panel);
+
+  const render = (filter = '') => {
+    list.innerHTML = '';
+    LAYER_DEFS.filter(d => d.label.toLowerCase().includes(filter)).forEach(d => {
+      const row = el('label', 'lp-row');
+      row.innerHTML = `
+        <input type="checkbox" data-k="${d.key}" ${state.layers[d.key] ? 'checked' : ''}/>
+        <span class="lp-ico">${d.icon}</span>
+        <span class="lp-label">${d.label}</span>
+        <button class="lp-info" data-i="${d.key}" title="Layer info">i</button>`;
+      list.appendChild(row);
+    });
+  };
+  render();
+
+  list.addEventListener('change', ev => {
+    const k = ev.target.dataset?.k;
+    if (!k) return;
+    setState({ layers: { ...state.layers, [k]: ev.target.checked } });
+  });
+  list.addEventListener('click', ev => {
+    const k = ev.target.dataset?.i;
+    if (!k) return;
+    const d = LAYER_DEFS.find(x => x.key === k);
+    bus.emit('toast', { title: d.label, msg: d.info, color: '#1f6feb' });
+  });
+  $('#lp-search', panel).addEventListener('input', ev => render(ev.target.value.trim().toLowerCase()));
+  $('.lp-caret', panel).addEventListener('click', () => panel.classList.toggle('collapsed'));
+}
+
+// js/features/alerts/alerts.js — toast alerting (alert:triggered / toast bus topics)
+import { $, el } from '../../utils/dom.js';
+import { bus } from '../../core/eventbus.js';
+import { CONFIG } from '../../config.js';
+
+export function toast(title, msg, color = '#ff4444'){
+  const t = el('div', 'toast');
+  t.style.borderLeftColor = color;
+  t.innerHTML = `
+    <button class="t-close">✕</button>
+    <div class="t-title" style="color:${color}">${title}</div>
+    <div class="t-msg">${msg}</div>`;
+  $('#toast-stack').appendChild(t);
+  t.querySelector('.t-close').onclick = () => t.remove();
+  setTimeout(() => t.remove(), 7000);
+}
+
+export function init(){
+  bus.on('alert:triggered', e => {
+    toast(
+      `HIGH-RISK THERMAL EVENT — ${CONFIG.classNames[e.cls]}`,
+      `${e.facility ? e.facility.name : 'Uncorrelated site'} · RISK ${e.score} (${e.tier.label}) · ${e.lat.toFixed(2)}, ${e.lon.toFixed(2)}`,
+      e.tier.color
+    );
+  });
+  bus.on('toast', t => toast(t.title, t.msg, t.color || '#1f6feb'));
+}
+
+// js/features/ui/topbar.js — brand, region, threatcon, search, tabs
+import { $ } from '../../utils/dom.js';
+import { state, setState } from '../../core/store.js';
+import { bus } from '../../core/eventbus.js';
+import { CONFIG } from '../../config.js';
+
+const FLAME = `<svg class="logo-flame" viewBox="0 0 16 16"><path d="M8 1c1 3-3 4.5-3 8a3.5 3.5 0 0 0 7 0c0-1.5-.7-2.6-1.5-3.5C9.7 6.6 9 8 8 8c.8-2.2 0-5 0-7z" fill="#ff6b35"/><path d="M8 6c.6 1.6-1.4 2.3-1.4 4a1.9 1.9 0 0 0 3.8 0C10.4 8.6 8.9 7.6 8 6z" fill="#ffb800"/></svg>`;
+
+export function init(){
+  $('#topbar').innerHTML = `
+    <div class="tb-left">
+      ${FLAME}<span class="logo-name">${CONFIG.appName}</span>
+      <span class="ver">${CONFIG.version}</span><span class="handle">${CONFIG.handle}</span>
+      <span class="live-wrap"><span class="live-dot"></span><span class="live-txt">LIVE</span></span>
+    </div>
+    <div class="tb-mid">
+      <select id="region-select">
+        <option value="INDIA">INDIA</option>
+        <option value="SOUTH_ASIA">SOUTH ASIA</option>
+        <option value="GLOBAL">GLOBAL</option>
+      </select>
+      <span class="badge mission">MISSION</span>
+      <span class="badge" id="threatcon">THREATCON 5</span><span id="threat-pct">8%</span>
+      <span class="alert-pill" id="alert-pill">🔥 0</span>
+    </div>
+    <div class="tb-right">
+      <input id="search-input" placeholder="Search facilities…"/>
+      <button class="tb-btn" id="btn-docs">Docs</button>
+      <button class="tb-btn primary" id="btn-signin">Sign In</button>
+    </div>`;
+
+  $('#tabrow').innerHTML = `
+    <button class="tab active" data-tab="main">Main</button>
+    <button class="tab" data-tab="analytics">Analytics</button>
+    <span class="tab-add">+</span>`;
+
+  $('#region-select').value = state.region;
+  $('#region-select').addEventListener('change', ev => setState({ region: ev.target.value, selected: null }));
+
+  $('#search-input').addEventListener('keydown', ev => {
+    if (ev.key !== 'Enter') return;
+    const q = ev.target.value.trim().toLowerCase();
+    if (!q) return;
+    const f = state.facilities.find(x => x.name.toLowerCase().includes(q));
+    if (f){
+      setState({ region: f.region === 'IN' ? 'INDIA' : 'GLOBAL' });
+      bus.emit('map:fly', { lat: f.lat, lon: f.lon, zoom: 9 });
+      bus.emit('toast', { title: 'FACILITY LOCATED', msg: `${f.name} · ${f.type.toUpperCase()} · hazard ${'★'.repeat(f.hazard)}`, color: '#3fb950' });
+    } else {
+      bus.emit('toast', { title: 'NO MATCH', msg: `No OSM facility matching “${q}” in registry.`, color: '#8b949e' });
+    }
+  });
+
+  $('#btn-signin').addEventListener('click', () =>
+    bus.emit('toast', { title: 'AUTH MODULE', msg: 'NTRO SSO integration is out of scope for the demo build.', color: '#1f6feb' }));
+  $('#btn-docs').addEventListener('click', () =>
+    bus.emit('toast', { title: 'DOCUMENTATION', msg: 'User guide + API contracts ship in docs/ at final delivery.', color: '#1f6feb' }));
+
+  $('#tabrow').addEventListener('click', ev => {
+    const t = ev.target.dataset?.tab;
+    if (t === 'main') setState({ overlay: null });
+    if (t === 'analytics') setState({ overlay: 'analytics' });
+  });
+}
+
+export function update(s){
+  const tc = $('#threatcon');
+  if (tc){
+    tc.textContent = s.threat.label;
+    tc.style.borderColor = s.threat.color;
+    tc.style.color = s.threat.color;
+    $('#threat-pct').textContent = s.threat.pct + '%';
+    $('#alert-pill').textContent = `🔥 ${s.alerts}`;
+  }
+  const tabs = document.querySelectorAll('#tabrow .tab');
+  tabs.forEach(t => t.classList.toggle('active',
+    (t.dataset.tab === 'analytics') === (s.overlay === 'analytics')));
+}
+
+// js/features/ui/timerange.js — 1h/6h/24h/48h/7d/ALL window filter
+import { $ } from '../../utils/dom.js';
+import { state, setState, subscribe } from '../../core/store.js';
+import { CONFIG } from '../../config.js';
+
+export function init(){
+  const wrap = $('#timerange');
+  wrap.innerHTML = Object.keys(CONFIG.ranges)
+    .map(k => `<button class="tr-btn" data-r="${k}">${k}</button>`).join('');
+  wrap.addEventListener('click', ev => {
+    const r = ev.target.dataset?.r;
+    if (r) setState({ range: r });
+  });
+  subscribe(s => {
+    wrap.querySelectorAll('.tr-btn').forEach(b => b.classList.toggle('active', b.dataset.r === s.range));
+  });
+  wrap.querySelector(`[data-r="${state.range}"]`)?.classList.add('active');
+}
+
+// js/features/ui/detailpanel.js — event dossier drawer (right side of map)
+import { $ } from '../../utils/dom.js';
+import { state, setState, subscribe } from '../../core/store.js';
+import { bus } from '../../core/eventbus.js';
+import { CONFIG } from '../../config.js';
+import { fmtHM, timeAgo } from '../../utils/format.js';
+import { cellKey } from '../../utils/geo.js';
+
+const ACTIONS = {
+  industrial_fire: ['Dispatch verification drone / field team', 'Notify State Fire Service + district control room', 'Trigger facility SOP & PESO review'],
+  persistent_thermal: ['Schedule regulatory inspection (CPCB/SPCB)', 'Log as chronic thermal source in registry', 'Cross-check OCEMS telemetry stream'],
+  wildfire: ['Alert District Forest Officer', 'Evaluate spread vector vs ERA5 wind field', 'Pre-position ground crews downwind'],
+  agricultural: ['Notify agriculture extension officer', 'Check stubble-burn advisory window', 'Aggregate to district burn count'],
+  unknown: ['Queue for analyst review', 'Task next satellite pass (VIIRS 375 m)', 'Cross-reference media / govt bulletins']
+};
+
+export function init(){
+  subscribe(s => {
+    const dd = $('#detail-drawer');
+    const evt = s.events.find(e => e.id === s.selected);
+    if (!evt){ dd.classList.add('hidden'); dd.innerHTML = ''; return; }
+    dd.classList.remove('hidden');
+    const color = CONFIG.colors[evt.cls];
+    dd.innerHTML = `
+      <div class="dd-head">
+        <span class="dd-class" style="color:${color}"><span class="dot" style="background:${color};box-shadow:0 0 8px ${color}"></span>${CONFIG.classNames[evt.cls]}</span>
+        <button class="dd-close" title="Close">✕</button>
+      </div>
+      <div class="dd-sub">EVENT ${evt.id} · ${timeAgo(evt.ts)} · ${evt.satellite}</div>
+      <div class="dd-k" style="font-size:10px">MODEL CONFIDENCE ${(evt.confidence * 100).toFixed(0)}%</div>
+      <div class="conf-bar"><div class="conf-fill" style="width:${evt.confidence * 100}%;background:${color}"></div></div>
+      <div class="dd-row"><span class="dd-k">ACQUIRED</span><span class="dd-v">${fmtHM(evt.ts)} · ${evt.daynight === 'D' ? 'DAY' : 'NIGHT'}</span></div>
+      <div class="dd-row"><span class="dd-k">FIRE RADIATIVE POWER</span><span class="dd-v">${evt.frp} MW</span></div>
+      <div class="dd-row"><span class="dd-k">BRIGHTNESS TEMP</span><span class="dd-v">${evt.brightness} K</span></div>
+      <div class="dd-row"><span class="dd-k">FIRMS CONFIDENCE</span><span class="dd-v">${evt.confidence}%</span></div>
+      <div class="dd-row"><span class="dd-k">PERSISTENCE</span><span class="dd-v" style="color:${evt.consecutiveDays >= 5 ? '#ff8c42' : 'inherit'}">${evt.consecutiveDays} consecutive day(s)</span></div>
+      <div class="dd-row"><span class="dd-k">AGG CELL</span><span class="dd-v">${cellKey(evt.lat, evt.lon)}</span></div>
+      <div class="dd-row"><span class="dd-k">COORDS</span><span class="dd-v">${evt.lat.toFixed(4)}, ${evt.lon.toFixed(4)}</span></div>
+      <div class="dd-row"><span class="dd-k">RISK SCORE</span><span class="dd-v" style="color:${evt.tier.color};font-weight:700">${evt.score} / 100 · ${evt.tier.label}</span></div>
+      ${evt.facility ? `
+        <div class="dd-fac">
+          <div class="f-name">🏭 ${evt.facility.name}</div>
+          <div class="f-meta">${evt.facility.type.toUpperCase()} · ${evt.facDistKm} km from centroid · hazard ${'★'.repeat(evt.facility.hazard)}</div>
+        </div>` : `
+        <div class="dd-fac"><div class="f-meta">No OSM industrial facility within ${CONFIG.facilityLinkKm} km — likely vegetation / agricultural source.</div></div>`}
+      <div class="dd-h">RECOMMENDED ACTION</div>
+      <ul class="dd-actions-list">${(ACTIONS[evt.cls] || []).map(a => `<li>${a}</li>`).join('')}</ul>
+      <div class="dd-actions">
+        <button class="tb-btn" id="dd-center">CENTER</button>
+        <button class="tb-btn" id="dd-dismiss">DISMISS</button>
+      </div>`;
+    $('.dd-close', dd).onclick = () => setState({ selected: null });
+    $('#dd-dismiss', dd).onclick = () => setState({ selected: null });
+    $('#dd-center', dd).onclick = () => bus.emit('map:fly', { lat: evt.lat, lon: evt.lon, zoom: 9 });
+  });
+}
+
+// js/features/ui/newsfeed.js — LIVE NEWS rail (simulated wire)
+import { $, el } from '../../utils/dom.js';
+import { bus } from '../../core/eventbus.js';
+import { NEWS_POOL } from '../../data/news.js';
+import { fmtHM, timeAgo } from '../../utils/format.js';
+
+const SOURCES = ['REUTERS','PTI','NDTV','BBC','BLOOMBERG','ALJAZEERA','THE HINDU','INDIAN EXPRESS'];
+let items = [], n = 0;
+
+function pushItem(src, text, ts){
+  items.unshift({ src, text, ts, n: ++n });
+  items = items.slice(0, 25);
+  renderList();
+}
+
+function renderList(){
+  const list = $('#news-list');
+  if (!list) return;
+  list.innerHTML = items.map(it => `
+    <div class="news-item">
+      <div class="ni-top"><span class="ni-src" style="color:${it.src === 'REUTERS' ? '#ff4444' : '#a7b8ae'}">${it.src}</span><span>${fmtHM(it.ts)} · ${timeAgo(it.ts)}</span></div>
+      <p>${it.text} <span class="cite">[${it.n}]</span></p>
+    </div>`).join('');
+  const c = $('#news-count');
+  if (c) c.textContent = items.length;
+}
+
+export function init(){
+  const panel = $('#news-panel');
+  panel.innerHTML = `
+    <div class="rail-head"><span class="dot"></span><span class="r-title">LIVE NEWS</span><span class="count" id="news-count">0</span>
+      <span class="spacer"></span><button class="rh-btn" title="Play">▷</button><button class="rh-btn" title="Mute">🔇</button><button class="rh-btn" title="Expand">⛶</button></div>
+    <div id="news-sources">${SOURCES.map((s, i) => `<span class="src-chip ${i === 0 ? 'active' : ''}">${s}</span>`).join('')}</div>
+    <div id="news-list"></div>
+    <div class="news-play">● READY WHEN YOU ARE<br/>ThermoWatch Wire<button id="news-play-btn">PLAY LIVE FEED</button></div>`;
+
+  const now = Date.now();
+  for (let i = 5; i >= 0; i--){
+    const p = NEWS_POOL[i % NEWS_POOL.length];
+    pushItem(p.src, p.text, now - i * 47 * 60000);
+  }
+  let cursor = 6;
+  setInterval(() => {
+    const p = NEWS_POOL[cursor % NEWS_POOL.length];
+    cursor++;
+    pushItem(p.src, p.text, Date.now());
+  }, 21000);
+  setInterval(renderList, 30000); // refresh "ago" labels
+
+  $('#news-play-btn').onclick = () =>
+    bus.emit('toast', { title: 'WIRE STREAM', msg: 'Live wire playback is simulated in the demo build.', color: '#1f6feb' });
+  $('#news-sources').addEventListener('click', ev => {
+    if (!ev.target.classList.contains('src-chip')) return;
+    document.querySelectorAll('#news-sources .src-chip').forEach(c => c.classList.remove('active'));
+    ev.target.classList.add('active');
+  });
+}
+
+// js/features/ui/insights.js — AI INSIGHTS brief (auto-generated narrative)
+import { $ } from '../../utils/dom.js';
+import { state } from '../../core/store.js';
+import { CONFIG } from '../../config.js';
+import { persistentCells } from '../persistence/persistence.js';
+import { fmtInt } from '../../utils/format.js';
+
+export function init(){
+  $('#insights-panel').innerHTML = `
+    <div class="rail-head"><span class="r-title">AI INSIGHTS</span><span class="rh-btn" title="Help">?</span>
+      <span class="spacer"></span><span class="live-badge">LIVE</span></div>
+    <div id="insights-body"></div>`;
+}
+
+export function render(events){
+  const body = $('#insights-body');
+  if (!body) return;
+  const total = events.length;
+  if (!total){ body.innerHTML = '<div class="brief"><div class="b-head">🧠 THERMAL BRIEF</div>No events in the current window.</div>'; return; }
+
+  const counts = {};
+  CONFIG.classOrder.forEach(c => counts[c] = 0);
+  events.forEach(e => counts[e.cls]++);
+  const indShare = Math.round(100 * (counts.industrial_fire + counts.persistent_thermal) / total);
+  const cells = persistentCells(events, CONFIG.persistMinDays);
+  const crit = events.filter(e => e.score >= 60).length;
+
+  const facCount = {};
+  events.forEach(e => { if (e.facility) facCount[e.facility.name] = (facCount[e.facility.name] || 0) + 1; });
+  const topFac = Object.entries(facCount).sort((a, b) => b[1] - a[1])[0];
+
+  const now = Date.now();
+  const recent = events.filter(e => now - e.ts < 48 * 3600000).length;
+  const prior  = events.filter(e => now - e.ts >= 48 * 3600000 && now - e.ts < 96 * 3600000).length;
+  const trend = recent > prior * 1.15 ? 'Worsening' : recent < prior * 0.85 ? 'Improving' : 'Stable';
+
+  const top3 = events.slice(0, 3);
+  body.innerHTML = `
+    <div class="brief">
+      <div class="b-head">🧠 THERMAL BRIEF</div>
+      Across the <b>${state.region.replace('_', ' ')}</b> AO, <b>${fmtInt(total)}</b> thermal events in window;
+      industrial-class share <b>${indShare}%</b> <span class="cite">[1]</span>.
+      <b>${cells.length}</b> cell(s) show ≥5-day persistence — consistent with chronic industrial sources <span class="cite">[2]</span>.
+      ${topFac ? `Highest correlated activity: <b>${topFac[0]}</b> (${topFac[1]} events).` : 'No OSM-facility correlation in window.'}
+    </div>
+    <div class="metric-row">
+      <div class="stat"><div class="v warn">${crit}</div><div class="k">Critical/High</div></div>
+      <div class="stat"><div class="v">${cells.length}</div><div class="k">Persistent cells</div></div>
+      <div class="stat"><div class="v" style="font-size:13px;padding-top:3px">${trend}</div><div class="k">${recent} recent vs ${prior} earlier</div></div>
+    </div>
+    <div class="brief" style="margin-top:8px;border-left-color:var(--grn-dim)">
+      <div class="b-head">▸ TOP EVENTS</div>
+      ${top3.map(e => `<div style="padding:2px 0"><span style="color:${CONFIG.colors[e.cls]}">●</span> ${CONFIG.classNames[e.cls]} · risk ${e.score} · ${e.facility ? e.facility.name : e.lat.toFixed(2) + ',' + e.lon.toFixed(2)}</div>`).join('')}
+    </div>`;
+}
+
+// js/features/ui/timeline.js — THREAT TIMELINE stacked bar chart (14 days)
+import { $ } from '../../utils/dom.js';
+import { CONFIG } from '../../config.js';
+import { fmtDay } from '../../utils/format.js';
+
+let cache = [], canvas = null, ctx = null;
+
+export function init(){
+  const panel = $('#timeline-panel');
+  panel.innerHTML = `
+    <div class="rail-head"><span class="r-title">THREAT TIMELINE</span><span class="rh-btn" title="Help">?</span>
+      <span class="spacer"></span><span class="snap">LIVE · snapshot</span></div>
+    <div id="tl-stats">
+      <div class="stat"><div class="v warn" id="tls-crit">0</div><div class="k">Critical/High</div></div>
+      <div class="stat"><div class="v" id="tls-days">0</div><div class="k">Active days</div></div>
+      <div class="stat"><div class="v" id="tls-trend" style="font-size:12px;padding-top:4px">—</div><div class="k">7d vs prior 7d</div></div>
+    </div>
+    <canvas id="tl-canvas"></canvas>`;
+  canvas = $('#tl-canvas');
+  ctx = canvas.getContext('2d');
+  new ResizeObserver(() => draw(cache)).observe(canvas);
+}
+
+export function draw(events){
+  cache = events;
+  if (!canvas || !ctx) return;
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (!w || !h) return;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+
+  // stats
+  const now = Date.now();
+  const crit = events.filter(e => e.score >= 60 && now - e.ts < 86400000).length;
+  const days = new Set(events.map(e => fmtDay(e.ts))).size;
+  const r7 = events.filter(e => now - e.ts < 7 * 86400000).length;
+  const p7 = events.filter(e => now - e.ts >= 7 * 86400000 && now - e.ts < 14 * 86400000).length;
+  $('#tls-crit').textContent = crit;
+  $('#tls-days').textContent = days;
+  $('#tls-trend').textContent = r7 > p7 ? `Worsening (${r7} vs ${p7})` : r7 < p7 ? `Improving (${r7} vs ${p7})` : `Stable (${r7})`;
+
+  // buckets: 14 days
+  const buckets = [];
+  for (let i = 13; i >= 0; i--){
+    const d0 = new Date(now - i * 86400000); d0.setUTCHours(0, 0, 0, 0);
+    const d1 = d0.getTime() + 86400000;
+    const row = { label: fmtDay(d0.getTime()), counts: {} , total: 0};
+    CONFIG.classOrder.forEach(c => row.counts[c] = 0);
+    events.forEach(e => { if (e.ts >= d0.getTime() && e.ts < d1){ row.counts[e.cls]++; row.total++; } });
+    buckets.push(row);
+  }
+  const max = Math.max(4, ...buckets.map(b => b.total));
+  const padL = 26, padB = 18, padT = 8;
+  const bw = (w - padL - 6) / buckets.length;
+
+  ctx.strokeStyle = '#1e2b24'; ctx.fillStyle = '#6d7d73';
+  ctx.font = '9px JetBrains Mono, monospace'; ctx.lineWidth = 1;
+  for (let g = 0; g <= 2; g++){
+    const y = padT + (h - padT - padB) * (1 - g / 2);
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(w - 4, y); ctx.stroke();
+    ctx.fillText(String(Math.round(max * g / 2)), 6, y + 3);
+  }
+  buckets.forEach((b, i) => {
+    const x = padL + i * bw + 2;
+    let y = h - padB;
+    CONFIG.classOrder.forEach(c => {
+      const n = b.counts[c];
+      if (!n) return;
+      const bh = (n / max) * (h - padT - padB);
+      ctx.fillStyle = CONFIG.colors[c];
+      ctx.fillRect(x, y - bh, bw - 4, bh);
+      y -= bh;
+    });
+    if (i % 2 === 0){ ctx.fillStyle = '#6d7d73'; ctx.fillText(b.label, x, h - 6); }
+  });
+}
+
+// js/features/ui/analytics.js — Analytics tab overlay (donut, persistence table, leaderboard)
+import { $ } from '../../utils/dom.js';
+import { state, setState, subscribe, visibleEvents } from '../../core/store.js';
+import { CONFIG } from '../../config.js';
+import { persistentCells } from '../persistence/persistence.js';
+import { fmtInt } from '../../utils/format.js';
+
+export function init(){
+  subscribe(s => {
+    const ov = $('#analytics-overlay');
+    if (s.overlay === 'analytics'){ ov.classList.remove('hidden'); render(visibleEvents(s)); }
+    else ov.classList.add('hidden');
+  });
+}
+
+function render(events){
+  const ov = $('#analytics-overlay');
+  const counts = {}; CONFIG.classOrder.forEach(c => counts[c] = 0);
+  events.forEach(e => counts[e.cls]++);
+  const total = events.length || 1;
+
+  const cells = persistentCells(events, CONFIG.persistMinDays).slice(0, 8);
+  const facAgg = new Map();
+  events.forEach(e => {
+    if (!e.facility) return;
+    const cur = facAgg.get(e.facility.id) || { fac: e.facility, n: 0, maxRisk: 0, cls: {} };
+    cur.n++; cur.maxRisk = Math.max(cur.maxRisk, e.score); cur.cls[e.cls] = (cur.cls[e.cls] || 0) + 1;
+    facAgg.set(e.facility.id, cur);
+  });
+  const board = [...facAgg.values()].sort((a, b) => b.maxRisk - a.maxRisk).slice(0, 8);
+  const sat = { 'VIIRS-SNPP': 0, 'MODIS-AQUA': 0 };
+  events.forEach(e => sat[e.satellite]++);
+
+  ov.innerHTML = `
+    <div class="ao-head">
+      <h2>ANALYTICS — CLASSIFICATION & PERSISTENCE DEEP DIVE</h2>
+      <span class="sub">${fmtInt(events.length)} events in window · ${state.region.replace('_', ' ')}</span>
+      <button class="ao-close">CLOSE ✕</button>
+    </div>
+    <div class="ao-grid">
+      <div class="ao-card"><h3>CLASS DISTRIBUTION</h3>
+        <canvas id="ao-donut" width="220" height="160" style="width:100%;max-width:260px;display:block;margin:0 auto"></canvas>
+        <div class="ao-legend">
+          ${CONFIG.classOrder.map(c => `
+            <div class="lg"><span class="sw" style="background:${CONFIG.colors[c]}"></span>${CONFIG.classNames[c]}
+              <span class="val">${Math.round(100 * counts[c] / total)}%</span></div>`).join('')}
+        </div>
+      </div>
+      <div class="ao-card"><h3>TOP PERSISTENT THERMAL SOURCES (≥5 DAYS)</h3>
+        <table class="ao-table"><tr><th>CELL</th><th>NEAREST FACILITY</th><th>DAYS</th><th>EVENTS</th></tr>
+        ${cells.map(c => {
+          const f = state.facilities.reduce((b, x) => {
+            const d = Math.hypot(x.lat - c.lat, x.lon - c.lon);
+            return (!b || d < b.d) ? { d, x } : b;
+          }, null);
+          return `<tr><td>${c.key}</td><td>${f && f.d < 0.2 ? f.x.name : '—'}</td><td style="color:#ff8c42">${c.maxDays}</td><td>${c.count}</td></tr>`;
+        }).join('') || '<tr><td colspan="4">No persistent cells in window.</td></tr>'}
+        </table>
+      </div>
+      <div class="ao-card"><h3>FACILITY RISK LEADERBOARD</h3>
+        <table class="ao-table"><tr><th>FACILITY</th><th>TYPE</th><th>EVENTS</th><th>MAX RISK</th></tr>
+        ${board.map(b => `<tr><td>${b.fac.name}</td><td>${b.fac.type.toUpperCase()}</td><td>${b.n}</td>
+          <td style="color:${b.maxRisk >= 60 ? '#ff4444' : b.maxRisk >= 40 ? '#ffb800' : '#3fb950'};font-weight:700">${b.maxRisk}</td></tr>`).join('')}
+        </table>
+      </div>
+      <div class="ao-card"><h3>SENSOR MIX</h3>
+        ${Object.entries(sat).map(([k, v]) => `
+          <div class="ao-bar-row"><span style="width:90px">${k}</span>
+            <div class="ao-bar"><div style="width:${Math.round(100 * v / total)}%"></div></div>
+            <span style="width:50px;text-align:right">${fmtInt(v)}</span></div>`).join('')}
+        <div class="ao-bar-row" style="margin-top:10px;color:var(--tx-2)">Near-real-time caveat: FIRMS latency 3–6 h; console is decision-support, not an alarm system.</div>
+      </div>
+    </div>`;
+  ov.querySelector('.ao-close').onclick = () => setState({ overlay: null });
+
+  // donut
+  const cv = ov.querySelector('#ao-donut');
+  const cx = cv.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  cv.width = 260 * dpr; cv.height = 170 * dpr;
+  cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const X = 130, Y = 85, R = 62, r0 = 34;
+  let a = -Math.PI / 2;
+  CONFIG.classOrder.forEach(c => {
+    const frac = counts[c] / total;
+    if (!frac) return;
+    const a2 = a + frac * Math.PI * 2;
+    cx.beginPath();
+    cx.arc(X, Y, R, a, a2); cx.arc(X, Y, r0, a2, a, true); cx.closePath();
+    cx.fillStyle = CONFIG.colors[c]; cx.fill();
+    a = a2;
+  });
+  cx.fillStyle = '#e6edf3'; cx.font = '700 16px JetBrains Mono, monospace'; cx.textAlign = 'center';
+  cx.fillText(fmtInt(events.length), X, Y + 2);
+  cx.fillStyle = '#6d7d73'; cx.font = '9px JetBrains Mono, monospace';
+  cx.fillText('EVENTS', X, Y + 15);
+}
+
+// js/core/clock.js — UTC situation clock
+import { fmtUTC } from '../utils/format.js';
+export function startClock(id){
+  const elx = document.getElementById(id);
+  if (!elx) return;
+  const tick = () => { elx.textContent = fmtUTC(new Date()); };
+  tick();
+  setInterval(tick, 1000);
+}
+
+// js/core/livefeed.js — simulated WebSocket: spawns new FIRMS detections
+import { state, setState } from './store.js';
+import { bus } from './eventbus.js';
+import { CONFIG } from '../config.js';
+import { spawnLiveEvent } from '../data/firms.js';
+import { enrichOne } from './pipeline.js';
+
+export function start(){
+  setInterval(() => {
+    const raw = spawnLiveEvent(state.events, state.facilities);
+    enrichOne(raw, state.events, state.facilities);
+    setState({ events: [raw, ...state.events] });
+    bus.emit('fire:new', raw);
+    if (raw.score >= 75){
+      setState({ alerts: state.alerts + 1 });
+      bus.emit('alert:triggered', raw);
+    }
+  }, CONFIG.liveIntervalMs);
+}
+
+// js/main.js — bootstrap + wiring + refresh loop
+import { CONFIG } from './config.js';
+import { state, setState, subscribe, visibleEvents } from './core/store.js';
+import { bus } from './core/eventbus.js';
+import { enrichAll } from './core/pipeline.js';
+import { startClock } from './core/clock.js';
+import { start as startLive } from './core/livefeed.js';
+import { FACILITIES } from './data/facilities.js';
+import { buildHistoricalEvents } from './data/firms.js';
+import { $ } from './utils/dom.js';
+import { fmtInt } from './utils/format.js';
+
+import * as topbar from './features/ui/topbar.js';
+import * as timerange from './features/ui/timerange.js';
+import * as layers from './features/map/layers.js';
+import * as map2d from './features/map/map2d.js';
+import * as map3d from './features/map/map3d.js';
+import * as detailpanel from './features/ui/detailpanel.js';
+import * as newsfeed from './features/ui/newsfeed.js';
+import * as insights from './features/ui/insights.js';
+import * as timeline from './features/ui/timeline.js';
+import * as analytics from './features/ui/analytics.js';
+import * as alerts from './features/alerts/alerts.js';
+
+// ── initial data + pipeline ────────────────────────────────────────────────
+const events = enrichAll(buildHistoricalEvents(FACILITIES), FACILITIES);
+setState({ events, facilities: FACILITIES });
+
+// ── module init ────────────────────────────────────────────────────────────
+topbar.init();
+timerange.init();
+layers.init();
+map2d.init($('#map2d'));
+detailpanel.init();
+newsfeed.init();
+insights.init();
+timeline.init();
+alerts.init();
+analytics.init();
+startClock('clock');
+
+// ── statusbar ──────────────────────────────────────────────────────────────
+$('#statusbar').innerHTML = `
+  <span class="sb-brand">🔥 ${CONFIG.appName}</span>
+  <span>${CONFIG.version} · ${CONFIG.handle}</span>
+  <span id="digest">—</span>
+  <span class="sb-links">
+    <span class="sb-link">Facilities</span><span class="sb-link">Hotspots</span><span class="sb-link">Alerts</span>
+    <span class="sb-link">Docs</span><span class="sb-link">GitHub</span><span class="sb-link">Status</span>
+  </span>`;
+$('#statusbar').addEventListener('click', ev => {
+  if (ev.target.classList.contains('sb-link'))
+    bus.emit('toast', { title: ev.target.textContent.toUpperCase(), msg: 'Section available in the full delivery build.', color: '#1f6feb' });
+});
+
+// ── 2D / 3D toggle, fullscreen, zoom controls ─────────────────────────────
+let globeReady = false;
+function applyMode(mode){
+  const is3 = mode === '3d';
+  $('#map2d').classList.toggle('hidden', is3);
+  $('#map3d').classList.toggle('hidden', !is3);
+  $('#beta-badge').classList.toggle('hidden', !is3);
+  $('#btn-2d').classList.toggle('active', !is3);
+  $('#btn-3d').classList.toggle('active', is3);
+  if (is3){
+    if (!globeReady){ map3d.init($('#map3d')); globeReady = true; }
+    map3d.show(); map3d.setEvents(visibleEvents(state));
+  } else {
+    map3d.hide(); setTimeout(() => map2d.invalidate(), 60);
+  }
+}
+$('#btn-2d').onclick = () => { setState({ mode: '2d' }); applyMode('2d'); };
+$('#btn-3d').onclick = () => { setState({ mode: '3d' }); applyMode('3d'); };
+$('#btn-split').onclick = () => bus.emit('toast', { title: 'SPLIT VIEW', msg: 'Dual-pane GIS view is on the post-hackathon roadmap.', color: '#1f6feb' });
+$('#btn-fs').onclick = () => {
+  const wrap = $('#map-wrap');
+  if (document.fullscreenElement) document.exitFullscreen();
+  else wrap.requestFullscreen?.();
+};
+document.addEventListener('fullscreenchange', () => setTimeout(() => map2d.invalidate(), 120));
+$('#mc-zin').onclick  = () => state.mode === '3d' ? map3d.zoomIn()  : map2d.zoomIn();
+$('#mc-zout').onclick = () => state.mode === '3d' ? map3d.zoomOut() : map2d.zoomOut();
+$('#mc-home').onclick = () => state.mode === '3d' ? (cameraHome3()) : map2d.home(false);
+function cameraHome3(){ bus.emit('toast', { title: 'VIEW RESET', msg: 'Globe re-centred on default orbit.', color: '#3fb950' }); }
+
+// ── refresh loop ───────────────────────────────────────────────────────────
+function refresh(s){
+  const vis = visibleEvents(s);
+  map2d.setEvents(vis);
+  if (s.mode === '3d' && globeReady) map3d.setEvents(vis);
+  timeline.draw(vis);
+  insights.render(vis);
+  topbar.update(s);
+
+  // threat condition from last-24h critical/high load
+  const now = Date.now();
+  const crit24 = vis.filter(e => e.score >= 60 && now - e.ts < 86400000).length;
+  const level = crit24 >= 10 ? 2 : crit24 >= 5 ? 3 : crit24 >= 1 ? 4 : 5;
+  const color = { 5:'#3fb950', 4:'#ffb800', 3:'#ff6b35', 2:'#ff4444' }[level];
+  if (s.threat.level !== level){
+    setState({ threat: { level, label: `THREATCON ${level}`, color, pct: Math.min(95, 6 + crit24 * 2) } });
+  }
+  // situation title + digest
+  const st = $('#situation-title');
+  if (st) st.textContent = `${s.region.replace('_', ' ')} SITUATION`;
+  const dg = $('#digest');
+  if (dg){
+    const on = Object.values(s.layers).filter(Boolean).length;
+    dg.textContent = `Digest coverage: complete — ${fmtInt(s.events.length)} FIRMS events · ${s.facilities.length} OSM facilities · 5/5 classes · layers ${on}/7`;
+  }
+}
+subscribe(refresh);
+refresh(state);
+
+// ── live simulation ────────────────────────────────────────────────────────
+startLive();
+bus.on('fire:new', e => {
+  if (e.score >= 40 && e.cls !== 'unknown')
+    bus.emit('toast', { title: `NEW ${CONFIG.classNames[e.cls]}`, msg: `${e.lat.toFixed(2)}, ${e.lon.toFixed(2)} · FRP ${e.frp} MW · risk ${e.score}`, color: CONFIG.colors[e.cls] });
+});
+
+
+              </script>
+                        </body>
+                        </html>
+                    

@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+.env.local
+.venv/
+__pycache__/
+*.pyc
+server/api/app/ml/models/
+.DS_Store

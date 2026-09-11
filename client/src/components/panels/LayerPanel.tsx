@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react';
 import { Layers as LayersIcon } from 'lucide-react';
 import { useAnalyticsStore } from '@/store/useAnalyticsStore';
 import { useFireStore } from '@/store/useFireStore';
+import { probeRenderer, type RendererCapability } from '@/features/map2d/WebGLProbe';
 import { CLASS_META, CLASS_ORDER } from '@/config/constants';
 import { computeBreakdown } from '@/selectors/fireSelectors';
 import { cn } from '@/lib/utils/cn';
@@ -14,6 +16,16 @@ export function LayerPanel() {
   const events = useFireStore((s) => s.events);
   const filters = useFireStore((s) => s.filters);
   const setFilters = useFireStore((s) => s.setFilters);
+  const rendererOverride = useAnalyticsStore((s) => s.rendererOverride);
+  const setRendererOverride = useAnalyticsStore((s) => s.setRendererOverride);
+  // Self-probe: the LAYERS row must show a real verdict even if boot-time routing
+  // never needed the capability (canvas-first) — no more stuck "probing…".
+  const [localCap, setLocalCap] = useState<RendererCapability | null>(null);
+  useEffect(() => {
+    let on = true;
+    probeRenderer().then((c) => { if (on) setLocalCap(c); });
+    return () => { on = false; };
+  }, []);
   const bd = computeBreakdown(events);
 
   const rows: Row[] = [
@@ -28,6 +40,8 @@ export function LayerPanel() {
     { key: 'labels', label: 'Country labels', on: layers.labels, toggle: () => setLayers({ labels: !layers.labels }) },
     { key: 'graticule', label: 'Graticule 15°', on: layers.graticule, toggle: () => setLayers({ graticule: !layers.graticule }) },
     { key: 'nightTexture', label: 'Night-lights texture', on: layers.nightTexture, toggle: () => setLayers({ nightTexture: !layers.nightTexture }) },
+    { key: 'imagery', label: 'NASA GIBS imagery', on: layers.imagery, toggle: () => setLayers({ imagery: !layers.imagery }) },
+    { key: 'starfield', label: 'Starfield (3D canvas)', on: layers.starfield, toggle: () => setLayers({ starfield: !layers.starfield }) },
     ...(advancedMode
       ? [
           { key: 'hex', label: 'Hex density (deck.gl)', on: layers.hexagonDensity, toggle: () => setLayers({ hexagonDensity: !layers.hexagonDensity }) },
@@ -56,6 +70,23 @@ export function LayerPanel() {
             </button>
           </li>
         ))}
+        <li className="mt-2 border-t border-edge pt-2">
+          <div className="mono mb-1 px-1.5 text-[9px] uppercase tracking-widest text-dim">renderer</div>
+          <div className="flex gap-1 px-1.5">
+            {(['auto', 'maplibre', 'canvas'] as const).map((r) => (
+              <button key={r} onClick={() => setRendererOverride(r)} aria-pressed={rendererOverride === r}
+                title={r === 'auto' ? 'auto = Canvas2D (the proven renderer) — identical to canvas unless MAPLIBRE was forced' : r === 'maplibre' ? 'force MapLibre GL (renders on healthy hosts; may be black on GL-broken hosts)' : 'PIN the Canvas2D renderer (always paints) — one-click escape from a forced MAPLIBRE'}
+                className={`mono flex-1 rounded-sm border px-1 py-0.5 text-[9px] uppercase ${rendererOverride === r ? 'border-ember/60 bg-ember/15 text-ember' : 'border-edge text-dim hover:text-ink'}`}>
+                {r}
+              </button>
+            ))}
+          </div>
+                    <div className="mono mt-1 px-1.5 text-[9px] text-dim">
+            {localCap
+              ? `webgl: ${localCap.rasterizes ? 'ok' : 'BROKEN'} · raf: ${localCap.shimmed ? 'shimmed' : `${localCap.rafFps} fps`} · presenting: untestable → canvas default`
+              : 'probing…'}
+          </div>
+        </li>
       </ul>
     </div>
   );

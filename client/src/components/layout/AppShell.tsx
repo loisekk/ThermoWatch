@@ -5,6 +5,8 @@ import { StatusTicker } from './StatusTicker';
 import { ViewStage } from '@/components/views/ViewStage';
 import { RightDock } from '@/components/panels/RightDock';
 import { EventDrawer } from '@/components/detail/EventDrawer';
+import { Scene3DViewer } from '@/components/detail/Scene3DViewer';
+import { FacilityDrawer } from '@/features/facility/FacilityDrawer';
 import { useFireStore } from '@/store/useFireStore';
 
 export function AppShell() {
@@ -21,6 +23,8 @@ export function AppShell() {
       </main>
       <div className="col-span-2"><StatusTicker /></div>
       <EventDrawer />
+      <FacilityDrawer />
+      <Scene3DViewer />
     </div>
   );
 }

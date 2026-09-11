@@ -1,0 +1,32 @@
+services:
+  api:
+    build: ./server/api
+    ports:
+      - "8000:8000"
+    environment:
+      - TW_CORS_ORIGINS=http://localhost:5173
+    volumes:
+      - ./server/api:/app
+      - ./server/api/app/ml/models:/app/ml/models
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  ingest:
+    build: ./server/ingest
+    environment:
+      - TW_API_URL=http://api:8000
+      - FIRMS_API_KEY=${FIRMS_API_KEY:-}
+      - POLL_MS=60000
+    depends_on:
+      - api
+    command: bun run src/main.ts
+
+  client:
+    build: ./client
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    volumes:
+      - ./client:/app
+      - /app/node_modules
+    command: npm run dev -- --host 0.0.0.0

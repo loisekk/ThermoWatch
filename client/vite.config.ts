@@ -7,6 +7,11 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+    // CRITICAL: globe.gl ships a nested three.js copy; two three instances in one
+    // page crash the GL render loop ("intersectsFrustum is not a function" in
+    // projectObject) and paint the 3D orb black. Dedupe every three import to the
+    // single top-level copy.
+    dedupe: ['three'],
   },
   server: { port: 5173 },
   build: {
@@ -14,6 +19,10 @@ export default defineConfig({
     // into lazy chunks below, so only raise the warning floor to match reality.
     chunkSizeWarningLimit: 2100,
     rollupOptions: {
+      input: {
+        landing: fileURLToPath(new URL('./index.html', import.meta.url)),
+        app: fileURLToPath(new URL('./app.html', import.meta.url)),
+      },
       output: {
         // Split the heavy geo/3D/UI vendors so the console shell stays a small
         // fast first paint; each chunk is cached independently by the browser.

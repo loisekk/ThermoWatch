@@ -1,4 +1,4 @@
-import { Activity, Award, BarChart3, BellRing, Bot, BrainCircuit, Factory, History } from 'lucide-react';
+import { Activity, Award, BarChart3, BellRing, Bot, BrainCircuit, Clock3, Factory, History } from 'lucide-react';
 import { useUIStore, type PanelKey } from '@/store/useUIStore';
 import { cn } from '@/lib/utils/cn';
 
@@ -11,6 +11,7 @@ const ITEMS: { key: PanelKey; icon: typeof Activity; label: string; hint: string
   { key: 'predict', icon: BrainCircuit, label: 'Model Run', hint: 'M' },
   { key: 'model', icon: Award, label: 'Model Card', hint: 'K' },
   { key: 'analytics', icon: BarChart3, label: 'Analytics', hint: 'X' },
+  { key: 'history', icon: Clock3, label: 'History', hint: 'H' },
 ];
 
 export function SideRail() {

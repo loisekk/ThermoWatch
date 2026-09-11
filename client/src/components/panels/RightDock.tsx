@@ -8,6 +8,7 @@ import { AgentChatPanel } from '@/features/agent/AgentChatPanel';
 import { ManualPredictionPanel } from '@/features/ml/ManualPredictionPanel';
 import { ModelCardPanel } from '@/features/model/ModelCardPanel';
 import { AnalyticsPanel } from '@/features/analytics/AnalyticsPanel';
+import { HistoryPanel } from '@/features/history/HistoryPanel';
 import { useUIStore } from '@/store/useUIStore';
 import { CLASS_META, CLASS_ORDER } from '@/config/constants';
 import { useFireStore } from '@/store/useFireStore';
@@ -60,6 +61,7 @@ export function RightDock() {
       {panel === 'predict' && <ManualPredictionPanel />}
       {panel === 'model' && <ModelCardPanel />}
       {panel === 'analytics' && <AnalyticsPanel />}
+      {panel === 'history' && <HistoryPanel />}
     </aside>
   );
 }

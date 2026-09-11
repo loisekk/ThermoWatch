@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { CLASS_META, MAX_EVENTS } from '@/config/constants';
 import { simulateInitial, simulateLive } from '@/services/simulation/simulator';
 import { FACILITIES } from '@/services/osm/facilitySeed';
-import type { AlertItem, AlertStatus, Facility, FireEvent, Filters, LogLine } from '@/types/domain';
+import type { AlertItem, AlertStatus, Facility, FireEvent, Filters, LogLine, WsEventType } from '@/types/domain';
 
 interface FireState {
   hydrated: boolean;
@@ -15,10 +15,13 @@ interface FireState {
   logs: LogLine[];
   filters: Filters;
   selectedEventId: string | null;
+  /** Facility whose dossier drawer is open (null = closed). */
+  selectedFacilityId: string | null;
   hydrate: () => void;
   tick: () => void;
   togglePause: () => void;
   select: (id: string | null) => void;
+  selectFacility: (id: string | null) => void;
   setFilters: (patch: Partial<Filters>) => void;
   setAlertStatus: (id: string, status: AlertStatus) => void;
   raiseAlert: (eventId: string) => void;
@@ -26,6 +29,10 @@ interface FireState {
   adoptServerEvents: (events: FireEvent[]) => void;
   /** Full handoff: replaces the local sim history with server truth. */
   setServerEvents: (events: FireEvent[]) => void;
+  /** Console log straight from the WS feed, optionally tagged with its taxonomy type. */
+  pushServerLog: (kind: LogLine['kind'], text: string, tag?: WsEventType) => void;
+  /** Alert surfaced by the server's alert:triggered frame. */
+  adoptServerAlert: (e: FireEvent) => void;
 }
 
 
@@ -42,6 +49,7 @@ export const useFireStore = create<FireState>()((set, get) => ({
   logs: [],
   filters: { classes: ['industrial', 'persistent', 'wildfire', 'agricultural'], minConfidence: 0, persistentOnly: false },
   selectedEventId: null,
+  selectedFacilityId: null,
 
   hydrate: () => {
     if (get().hydrated) return;
@@ -68,6 +76,7 @@ export const useFireStore = create<FireState>()((set, get) => ({
 
   togglePause: () => set((s) => ({ paused: !s.paused })),
   select: (id) => set({ selectedEventId: id }),
+  selectFacility: (selectedFacilityId) => set({ selectedFacilityId }),
   setSource: (source) => set((s) => ({ source, paused: source === 'server' ? false : s.paused })),
   adoptServerEvents: (incoming) =>
     set((s) => {
@@ -81,6 +90,19 @@ export const useFireStore = create<FireState>()((set, get) => ({
       events: [...incoming].sort((a, b) => a.detectedAt - b.detectedAt).slice(-MAX_EVENTS),
       logs: pushLogs(s.logs, [{ ts: Date.now(), kind: 'system', text: `Server feed connected · ${incoming.length} events adopted (sim history replaced)` }]),
     })),
+  pushServerLog: (kind, text, tag) =>
+    set((s) => ({ logs: pushLogs(s.logs, [{ ts: Date.now(), kind, text, tag }]) })),
+  adoptServerAlert: (e) => {
+    const alert = makeAlert(e);
+    set((s) => ({
+      alerts: [...s.alerts, alert].slice(-60),
+      logs: pushLogs(s.logs, [{
+        ts: alert.createdAt, kind: 'alert',
+        text: `ALERT ${alert.level.toUpperCase()} · ${alert.message}`,
+        tag: 'alert:triggered',
+      }]),
+    }));
+  },
   setFilters: (patch) => set((s) => ({ filters: { ...s.filters, ...patch } })),
   setAlertStatus: (id, status) =>
     set((s) => ({

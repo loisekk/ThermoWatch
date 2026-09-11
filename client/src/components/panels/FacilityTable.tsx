@@ -9,6 +9,7 @@ export function FacilityTable() {
   const events = useFireStore((s) => s.events);
   const facilities = useFireStore((s) => s.facilities);
   const requestFocus = useUIStore((s) => s.requestFocus);
+  const selectFacility = useFireStore((s) => s.selectFacility);
 
   return (
     <Panel title="OSM Industrial Registry" icon={<Factory />} bodyClassName="p-0">
@@ -20,7 +21,7 @@ export function FacilityTable() {
           {facilities.map((f) => {
             const n = eventsNearFacility(events, f).length;
             return (
-              <tr key={f.id} onClick={() => requestFocus(f.lat, f.lon)} className="cursor-pointer transition-colors hover:bg-panel2/70">
+              <tr key={f.id} onClick={() => { requestFocus(f.lat, f.lon); selectFacility(f.id); }} className="cursor-pointer transition-colors hover:bg-panel2/70">
                 <td className="max-w-36 truncate px-2.5 py-1.5 text-ink">{f.name}</td>
                 <td className="py-1.5 text-mute">{SUBTYPE_LABEL[f.subtype]}</td>
                 <td className={`py-1.5 ${f.hazard === 'G-III' ? 'text-magma' : 'text-amber'}`}>{f.hazard}</td>

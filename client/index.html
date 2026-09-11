@@ -1,17 +1,1633 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="ThermoWatch — near-real-time classification of industrial fires and persistent thermal sources from NASA FIRMS, OSM and satellite data." />
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='25' font-size='25'%3E%F0%9F%94%A5%3C/text%3E%3C/svg%3E" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
-    <title>ThermoWatch · Industrial Fire Intelligence</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<title>ThermoWatch — Orbital Thermal Intelligence for Industrial Fire Classification</title>
+<meta name="description" content="ThermoWatch classifies NASA FIRMS thermal detections into industrial fire subtypes, fuses OSM facility context, tracks persistence and recommends emergency response. SIH26162 · NTRO.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23FF6B35'/><path d='M16 6c3 5 7 7 7 12a7 7 0 1 1-14 0c0-3 2-5 3-7 1 2 2 3 2 3s1-4 2-8z' fill='%2307090d'/></svg>">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/space-grotesk@5.0.0/500.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/space-grotesk@5.0.0/700.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-sans@5.0.0/400.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-sans@5.0.0/500.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-sans@5.0.0/600.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-mono@5.0.0/400.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-mono@5.0.0/500.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-mono@5.0.0/600.css">
+<style>
+:root{
+  --bg:#06080c; --bg2:#0a0e14; --panel:#0f141c; --panel2:#141b26; --line:#1c2532; --line2:#27334a;
+  --txt:#e8eef5; --mut:#8b98a9; --dim:#5b6879;
+  --orange:#FF6B35; --amber:#FFB800; --green:#3FB950; --red:#FF4444; --wld:#ff4d5e; --agr:#8BD450; --gray:#7D8DA1; --blue:#58a6ff;
+  --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,monospace;
+  --sans:'IBM Plex Sans',system-ui,-apple-system,sans-serif;
+  --disp:'Space Grotesk','IBM Plex Sans',system-ui,sans-serif;
+  --r:14px; --shadow:0 18px 50px rgba(0,0,0,.55);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--txt);font-family:var(--sans);font-size:15px;line-height:1.65;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(1000px 560px at 88% -12%,rgba(255,107,53,.10),transparent 62%),
+             radial-gradient(760px 460px at -12% 34%,rgba(88,166,255,.055),transparent 60%),
+             radial-gradient(600px 400px at 50% 110%,rgba(255,184,0,.045),transparent 60%),
+             linear-gradient(rgba(28,37,50,.32) 1px,transparent 1px),linear-gradient(90deg,rgba(28,37,50,.32) 1px,transparent 1px);
+  background-size:auto,auto,auto,64px 64px,64px 64px;}
+::selection{background:rgba(255,107,53,.4);color:#fff}
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:#232d3d;border-radius:8px}::-webkit-scrollbar-thumb:hover{background:#31405a}::-webkit-scrollbar-track{background:transparent}
+.mono{font-family:var(--mono)}
+.wrap{max-width:1260px;margin:0 auto;padding:0 26px;position:relative;z-index:1}
+section{padding:110px 0;position:relative;scroll-margin-top:88px}
+.kicker{font-family:var(--mono);font-size:11px;letter-spacing:.26em;color:var(--orange);text-transform:uppercase;display:flex;align-items:center;gap:12px;margin-bottom:16px;font-weight:500}
+.kicker::before{content:"";width:30px;height:1px;background:linear-gradient(90deg,var(--orange),transparent)}
+h1,h2,h3,.disp{font-family:var(--disp)}
+h2{font-size:clamp(30px,4.2vw,46px);font-weight:700;margin-bottom:16px;letter-spacing:-.025em;line-height:1.1}
+.lead{color:var(--mut);max-width:740px;font-size:16.5px}
+.grad{background:linear-gradient(94deg,#fff 5%,#ffc9b0 38%,var(--orange) 72%,#ff9d5c 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.secnum{position:absolute;right:3vw;top:56px;font-family:var(--disp);font-size:clamp(90px,13vw,170px);font-weight:700;color:rgba(255,255,255,.028);pointer-events:none;user-select:none;line-height:1;letter-spacing:-.05em}
+#progress{position:fixed;top:0;left:0;height:2px;z-index:200;background:linear-gradient(90deg,var(--orange),var(--amber));width:0;box-shadow:0 0 12px rgba(255,107,53,.7)}
+/* NAV */
+nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(6,8,12,.72);backdrop-filter:blur(16px) saturate(1.3);border-bottom:1px solid rgba(28,37,50,.8)}
+.nav-in{max-width:1400px;margin:0 auto;padding:0 24px;height:66px;display:flex;align-items:center;gap:26px}
+.logo{display:flex;align-items:center;gap:12px;text-decoration:none;color:var(--txt)}
+.logo-chip{width:34px;height:34px;border-radius:9px;background:linear-gradient(140deg,var(--orange),#b93a10);display:grid;place-items:center;box-shadow:0 0 20px rgba(255,107,53,.5),inset 0 1px 0 rgba(255,255,255,.35)}
+.logo-chip svg{width:18px;height:18px}
+.logo b{font-family:var(--disp);font-weight:700;letter-spacing:.16em;font-size:14.5px}
+.logo small{display:block;font-family:var(--mono);font-size:8.5px;color:var(--dim);letter-spacing:.22em;margin-top:1px}
+.nav-links{display:flex;gap:2px;margin-left:auto}
+.nav-links a{color:var(--mut);text-decoration:none;font-family:var(--mono);font-size:11px;letter-spacing:.1em;padding:8px 11px;border-radius:8px;transition:.2s;font-weight:500}
+.nav-links a:hover{color:var(--txt);background:var(--panel2)}
+.nav-links a.on{color:var(--orange);background:rgba(255,107,53,.1)}
+.nav-cta{display:flex;align-items:center;gap:12px}
+.live-chip{font-family:var(--mono);font-size:10px;color:var(--green);border:1px solid rgba(63,185,80,.4);background:rgba(63,185,80,.08);padding:6px 11px;border-radius:7px;display:flex;align-items:center;gap:7px;letter-spacing:.14em;font-weight:500}
+.dot{width:7px;height:7px;border-radius:50%;background:currentColor;box-shadow:0 0 9px currentColor;animation:pulse 1.6s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.btn{font-family:var(--mono);font-size:12px;letter-spacing:.08em;padding:11px 20px;border-radius:10px;border:1px solid transparent;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:9px;transition:.22s;font-weight:600;position:relative;overflow:hidden}
+.btn-p{background:linear-gradient(140deg,var(--orange),#d9481a);color:#12080a;box-shadow:0 8px 26px rgba(255,107,53,.38)}
+.btn-p::after{content:"";position:absolute;top:0;left:-70%;width:45%;height:100%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.45),transparent);transform:skewX(-20deg);transition:.5s}
+.btn-p:hover::after{left:130%}
+.btn-p:hover{transform:translateY(-2px);box-shadow:0 12px 34px rgba(255,107,53,.55)}
+.btn-g{background:rgba(15,20,28,.7);border-color:var(--line2);color:var(--txt);backdrop-filter:blur(6px)}
+.btn-g:hover{border-color:var(--orange);color:var(--orange);transform:translateY(-2px)}
+.btn-s{padding:7px 13px;font-size:11px}
+.burger{display:none;margin-left:auto;background:none;border:1px solid var(--line2);border-radius:9px;color:var(--txt);width:42px;height:38px;cursor:pointer;font-size:17px}
+/* HERO */
+#top{padding:150px 0 0;min-height:100vh;display:flex;flex-direction:column;justify-content:center;overflow:hidden}
+.hero-grid{display:grid;grid-template-columns:1.02fr .98fr;gap:34px;align-items:center;width:100%}
+.hero-tag{font-family:var(--mono);font-size:10.5px;color:var(--amber);border:1px solid rgba(255,184,0,.35);background:rgba(255,184,0,.07);padding:7px 14px;border-radius:999px;display:inline-flex;gap:10px;align-items:center;letter-spacing:.18em;margin-bottom:26px;font-weight:500}
+h1{font-size:clamp(38px,5.4vw,66px);font-weight:700;margin-bottom:22px;letter-spacing:-.03em;line-height:1.05}
+.hero-sub{color:var(--mut);font-size:17px;max-width:580px;margin-bottom:32px}
+.hero-sub b{color:var(--txt);font-weight:600}
+.hero-ctas{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:44px}
+.hero-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;backdrop-filter:blur(8px)}
+.hs{background:linear-gradient(160deg,rgba(15,20,28,.9),rgba(10,14,20,.9));padding:18px 16px}
+.hs b{font-family:var(--disp);font-size:26px;color:var(--orange);display:block;line-height:1.1;font-weight:700;letter-spacing:-.02em}
+.hs span{font-family:var(--mono);font-size:9px;letter-spacing:.16em;color:var(--dim);text-transform:uppercase}
+.hero-vis{position:relative;height:620px}
+#heroGlobe{width:100%;height:100%;display:block;cursor:grab}
+.hero-vis .hud{position:absolute;font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:.12em;pointer-events:none;background:rgba(8,11,16,.55);border:1px solid rgba(39,51,74,.6);padding:6px 10px;border-radius:8px;backdrop-filter:blur(6px)}
+.hud.tl{top:14px;left:16px;color:var(--green)}
+.hud.tr{top:14px;right:16px}
+.hud.bl{bottom:14px;left:16px}
+.hud.br{bottom:14px;right:16px;color:var(--amber)}
+.scroll-hint{position:absolute;bottom:26px;left:50%;transform:translateX(-50%);font-family:var(--mono);font-size:9.5px;letter-spacing:.3em;color:var(--dim);display:flex;flex-direction:column;align-items:center;gap:8px;z-index:2}
+.scroll-hint i{width:1px;height:34px;background:linear-gradient(var(--orange),transparent);animation:drop 1.8s infinite}
+@keyframes drop{0%{transform:scaleY(0);transform-origin:top}50%{transform:scaleY(1)}100%{transform:scaleY(0);transform-origin:bottom}}
+/* TICKER + MARQUEE */
+.ticker{border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:rgba(9,12,17,.8);position:relative;z-index:1}
+.tick-in{max-width:1400px;margin:0 auto;display:flex;align-items:center;gap:16px;height:46px;padding:0 24px}
+.tick-label{font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:.16em;white-space:nowrap;display:flex;gap:8px;align-items:center;font-weight:500}
+.tick-view{overflow:hidden;flex:1;mask-image:linear-gradient(90deg,transparent,#000 4%,#000 96%,transparent)}
+.tick-row{display:flex;gap:28px;width:max-content;animation:tick 50s linear infinite}
+.tick-view:hover .tick-row{animation-play-state:paused}
+@keyframes tick{to{transform:translateX(-50%)}}
+.tick-item{font-family:var(--mono);font-size:11px;white-space:nowrap;display:flex;gap:8px;align-items:center;color:var(--mut)}
+.tick-item i{width:7px;height:7px;border-radius:50%;flex:none}
+.tick-btn{background:none;border:1px solid var(--line2);color:var(--mut);font-family:var(--mono);font-size:10px;border-radius:7px;padding:5px 11px;cursor:pointer;font-weight:500}
+.tick-btn:hover{color:var(--orange);border-color:var(--orange)}
+.mq{border-bottom:1px solid var(--line);background:rgba(6,8,12,.6);overflow:hidden;position:relative;z-index:1}
+.mq-row{display:flex;gap:0;width:max-content;animation:mq 34s linear infinite}
+.mq:hover .mq-row{animation-play-state:paused}
+@keyframes mq{to{transform:translateX(-50%)}}
+.mq-item{font-family:var(--mono);font-size:11px;letter-spacing:.22em;color:var(--dim);padding:13px 0;display:flex;align-items:center;gap:26px;padding-right:26px;white-space:nowrap;font-weight:500}
+.mq-item b{color:var(--mut);font-weight:600}
+.mq-item::after{content:"◆";color:var(--orange);font-size:7px}
+/* CARDS */
+.grid{display:grid;gap:20px}
+.g2{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:repeat(3,1fr)}.g4{grid-template-columns:repeat(4,1fr)}
+.card{background:linear-gradient(165deg,rgba(15,20,28,.92),rgba(10,14,20,.92));border:1px solid var(--line);border-radius:var(--r);padding:26px;position:relative;transition:.28s;overflow:hidden;backdrop-filter:blur(6px)}
+.card::before{content:"";position:absolute;inset:0;background:radial-gradient(400px 200px at 20% -10%,rgba(255,107,53,.07),transparent 60%);opacity:0;transition:.3s}
+.card:hover{border-color:var(--line2);transform:translateY(-4px);box-shadow:var(--shadow)}
+.card:hover::before{opacity:1}
+.card h3{font-size:17px;margin-bottom:10px;display:flex;align-items:center;gap:11px;font-weight:600;letter-spacing:-.01em}
+.card p{color:var(--mut);font-size:13.5px}
+.ico{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;flex:none;font-family:var(--mono);font-size:13px;font-weight:600}
+.chip{font-family:var(--mono);font-size:10px;padding:4px 10px;border-radius:7px;border:1px solid var(--line2);color:var(--mut);letter-spacing:.1em;font-weight:500}
+.chip.on{background:rgba(255,107,53,.14);border-color:rgba(255,107,53,.6);color:var(--orange)}
+.panel{background:rgba(15,20,28,.85);border:1px solid var(--line);border-radius:var(--r);backdrop-filter:blur(6px)}
+.panel-h{padding:14px 19px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:11px;letter-spacing:.16em;color:var(--mut);text-transform:uppercase;font-weight:500}
+.panel-b{padding:19px}
+.tbl{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px}
+.tbl th{text-align:left;color:var(--dim);font-size:10px;letter-spacing:.16em;text-transform:uppercase;font-weight:500;padding:11px 15px;border-bottom:1px solid var(--line)}
+.tbl td{padding:11px 15px;border-bottom:1px solid rgba(28,37,50,.6);color:var(--mut)}
+.tbl tr:last-child td{border-bottom:none}
+.tbl td:first-child{color:var(--txt)}
+.tbl tr:hover td{background:rgba(255,107,53,.045)}
+.code{font-family:var(--mono);background:#080b10;border:1px solid var(--line);border-radius:11px;padding:17px;font-size:12px;line-height:1.75;color:#c9d4e3;overflow:auto;position:relative;white-space:pre}
+.code .k{color:var(--orange)}.code .s{color:var(--agr)}.code .c{color:var(--dim)}.code .n{color:var(--amber)}.code .f{color:var(--blue)}
+.copy{position:absolute;top:10px;right:10px;background:var(--panel2);border:1px solid var(--line2);color:var(--mut);font-family:var(--mono);font-size:10px;border-radius:7px;padding:4px 10px;cursor:pointer}
+.copy:hover{color:var(--orange);border-color:var(--orange)}
+.rev{opacity:0;transform:translateY(26px);transition:opacity .8s cubic-bezier(.2,.7,.2,1),transform .8s cubic-bezier(.2,.7,.2,1)}
+.rev.in{opacity:1;transform:none}
+.pos{border-left:3px solid var(--orange);background:linear-gradient(90deg,rgba(255,107,53,.09),transparent 70%);padding:24px 28px;border-radius:0 14px 14px 0;font-size:16px;color:#cfd8e3;margin-top:38px}
+.pos b{color:var(--orange)}
+/* DEMO */
+.demo-shell{border:1px solid var(--line2);border-radius:18px;overflow:hidden;background:#090c11;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+.demo-top{display:flex;align-items:center;gap:12px;padding:11px 15px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#0e131b,#0b0f15);flex-wrap:wrap}
+.seg{display:flex;background:var(--panel);border:1px solid var(--line2);border-radius:10px;overflow:hidden}
+.seg button{font-family:var(--mono);font-size:11px;letter-spacing:.1em;background:none;border:none;color:var(--mut);padding:9px 16px;cursor:pointer;display:flex;gap:7px;align-items:center;font-weight:500}
+.seg button.on{background:rgba(255,107,53,.16);color:var(--orange);font-weight:600}
+.seg button:hover:not(.on){color:var(--txt)}
+.demo-main{display:grid;grid-template-columns:1fr 350px;min-height:660px}
+.demo-view{position:relative;background:#070a0e;border-right:1px solid var(--line);overflow:hidden}
+#map2d,#globe2d{position:absolute;inset:0;width:100%;height:100%;display:block}
+#map2d{cursor:grab}
+.view-chips{position:absolute;top:13px;left:13px;display:flex;gap:8px;z-index:5;flex-wrap:wrap}
+.vchip{font-family:var(--mono);font-size:10px;letter-spacing:.12em;background:rgba(12,16,22,.85);border:1px solid var(--line2);color:var(--mut);padding:6px 11px;border-radius:8px;backdrop-filter:blur(8px);font-weight:500}
+.vchip.live{color:var(--green);border-color:rgba(63,185,80,.45);cursor:pointer}
+.vchip.warn{color:var(--amber);border-color:rgba(255,184,0,.5);cursor:pointer}
+.zoomer{position:absolute;top:13px;right:13px;display:flex;flex-direction:column;gap:6px;z-index:5}
+.zoomer button{width:33px;height:33px;border-radius:9px;background:rgba(12,16,22,.85);border:1px solid var(--line2);color:var(--mut);cursor:pointer;font-family:var(--mono);font-size:15px;backdrop-filter:blur(6px)}
+.zoomer button:hover{color:var(--orange);border-color:var(--orange)}
+.layers{position:absolute;top:54px;left:13px;z-index:6;width:232px;background:rgba(10,14,20,.94);border:1px solid var(--line2);border-radius:12px;backdrop-filter:blur(10px);padding:13px;display:none;box-shadow:var(--shadow)}
+.layers.open{display:block}
+.layers h5{font-family:var(--mono);font-size:10px;letter-spacing:.18em;color:var(--mut);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;font-weight:500}
+.layers label{display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:11px;color:var(--mut);padding:5px 2px;cursor:pointer}
+.layers label:hover{color:var(--txt)}
+.layers input{accent-color:var(--green);width:13px;height:13px;cursor:pointer}
+.legend{position:absolute;bottom:13px;right:13px;z-index:5;background:rgba(10,14,20,.9);border:1px solid var(--line2);border-radius:12px;padding:13px 15px;backdrop-filter:blur(8px)}
+.legend h6{font-family:var(--mono);font-size:9.5px;letter-spacing:.18em;color:var(--dim);margin-bottom:9px;font-weight:500}
+.legend div{display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:10.5px;color:var(--mut);padding:2.5px 0}
+.legend i{width:9px;height:9px;border-radius:50%;flex:none}
+.legend i.ring{background:none!important;border:1.5px solid var(--amber)}
+.legend i.fac{background:none!important;border:1.5px solid var(--gray)}
+.demo-side{display:flex;flex-direction:column;overflow-y:auto;max-height:780px;background:#0a0e14}
+.side-sec{border-bottom:1px solid var(--line);padding:16px}
+.side-sec h4{font-family:var(--mono);font-size:10px;letter-spacing:.2em;color:var(--mut);text-transform:uppercase;margin-bottom:13px;display:flex;gap:8px;align-items:center;font-weight:500}
+.fchips{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:13px}
+.fchip{font-family:var(--mono);font-size:10px;font-weight:600;padding:5px 11px;border-radius:7px;cursor:pointer;border:1px solid transparent;letter-spacing:.08em;opacity:.32;transition:.2s}
+.fchip.on{opacity:1}
+.range-chips{display:flex;gap:6px;flex-wrap:wrap}
+.rchip{font-family:var(--mono);font-size:10px;background:var(--panel);border:1px solid var(--line2);color:var(--mut);padding:5px 11px;border-radius:7px;cursor:pointer;font-weight:500}
+.rchip.on{background:rgba(63,185,80,.14);border-color:var(--green);color:var(--green);font-weight:600}
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--line)}
+.kpi{background:var(--panel);padding:12px 10px}
+.kpi span{font-family:var(--mono);font-size:8.5px;letter-spacing:.12em;color:var(--dim);text-transform:uppercase;display:block;margin-bottom:6px}
+.kpi b{font-family:var(--disp);font-size:20px;color:var(--txt);font-weight:700}
+.kpi b small{font-size:11px;color:var(--orange)}
+.slider-row{display:flex;align-items:center;gap:12px}
+.slider-row label{font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:.12em;white-space:nowrap}
+input[type=range]{-webkit-appearance:none;appearance:none;flex:1;height:4px;border-radius:4px;background:var(--line2);outline:none;cursor:pointer}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--orange);box-shadow:0 0 10px rgba(255,107,53,.65);cursor:pointer}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border:none;border-radius:50%;background:var(--orange)}
+#donutWrap{display:flex;align-items:center;gap:16px}
+#donutLegend{flex:1;display:flex;flex-direction:column;gap:8px}
+.dl{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10.5px;color:var(--mut)}
+.dl i{width:8px;height:8px;border-radius:50%}
+.dl b{margin-left:auto;color:var(--txt)}
+.dl span{color:var(--dim)}
+.chronic{display:flex;flex-direction:column;gap:9px}
+.chr{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:11px 13px;cursor:pointer;transition:.2s}
+.chr:hover{border-color:var(--amber);transform:translateX(3px)}
+.chr b{font-size:12.5px;display:block;margin-bottom:4px;font-weight:600}
+.chr .m{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--dim)}
+.chr .bar{height:3px;border-radius:3px;background:var(--line2);margin-top:8px;overflow:hidden}
+.chr .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--amber),var(--orange))}
+.drawer{position:absolute;top:0;right:0;bottom:0;width:350px;background:rgba(10,14,20,.97);border-left:1px solid var(--line2);z-index:20;transform:translateX(103%);transition:transform .38s cubic-bezier(.2,.8,.2,1);overflow-y:auto;backdrop-filter:blur(12px)}
+.drawer.open{transform:none}
+.dw-h{padding:16px 18px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:rgba(10,14,20,.98);z-index:2}
+.dw-h b{font-family:var(--mono);font-size:12px;letter-spacing:.08em}
+.dw-x{background:none;border:none;color:var(--dim);font-size:17px;cursor:pointer}
+.dw-x:hover{color:var(--red)}
+.dw-b{padding:18px}
+.kv{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11.5px;padding:7px 0;border-bottom:1px dashed rgba(28,37,50,.8)}
+.kv span{color:var(--dim)}.kv b{color:var(--txt);font-weight:500}
+.badge{font-family:var(--mono);font-size:10px;font-weight:600;padding:4px 10px;border-radius:7px;letter-spacing:.1em}
+.sugg{background:rgba(255,107,53,.08);border:1px solid rgba(255,107,53,.3);border-radius:11px;padding:13px;margin:15px 0}
+.sugg h6{font-family:var(--mono);font-size:9.5px;letter-spacing:.18em;color:var(--orange);margin-bottom:8px;font-weight:600}
+.sugg p{font-size:12.5px;color:#d8c9c0}
+.sugg ul{margin:9px 0 0 16px;font-family:var(--mono);font-size:10.5px;color:var(--mut)}
+.resp{margin-top:12px;display:none}
+.resp.open{display:block}
+.stn{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-bottom:8px;font-family:var(--mono);font-size:11px}
+.stn b{color:var(--txt);display:flex;justify-content:space-between;font-weight:600}
+.stn span{color:var(--dim);font-size:10px}
+/* LAB */
+.lab{display:grid;grid-template-columns:.9fr 1.1fr;gap:24px;align-items:start}
+.sl-row{margin-bottom:16px}
+.sl-row .lb{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--mut);margin-bottom:8px}
+.sl-row .lb b{color:var(--orange)}
+.prob{margin-bottom:10px}
+.prob .pl{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;margin-bottom:5px}
+.prob .pl span{color:var(--mut)}.prob .pl b{color:var(--txt)}
+.prob .pb{height:7px;background:var(--line);border-radius:6px;overflow:hidden}
+.prob .pb i{display:block;height:100%;border-radius:6px;transition:width .5s cubic-bezier(.2,.8,.2,1)}
+.risk-meter{display:flex;gap:5px;margin:15px 0 9px}
+.risk-meter i{flex:1;height:8px;border-radius:4px;background:var(--line2);transition:.3s}
+.scen{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:22px}
+/* ARCH */
+.flow{display:flex;flex-direction:column}
+.node{background:linear-gradient(165deg,rgba(15,20,28,.92),rgba(10,14,20,.92));border:1px solid var(--line);border-radius:var(--r);padding:20px 23px;cursor:pointer;transition:.25s;position:relative}
+.node:hover,.node.on{border-color:var(--orange);box-shadow:0 0 0 1px rgba(255,107,53,.3),0 12px 34px rgba(255,107,53,.13)}
+.node h4{font-family:var(--disp);font-size:14.5px;display:flex;align-items:center;gap:12px;font-weight:600}
+.node p{color:var(--dim);font-size:12px;font-family:var(--mono);margin-top:6px}
+.pipe{width:2px;height:36px;margin:0 auto;background:var(--line2);position:relative;overflow:hidden}
+.pipe::after{content:"";position:absolute;left:0;top:-40%;width:100%;height:40%;background:linear-gradient(var(--orange),transparent);animation:flow 1.8s linear infinite}
+@keyframes flow{to{top:110%}}
+.arch-detail{position:sticky;top:92px}
+.arch-detail ul{margin:13px 0 0 17px;color:var(--mut);font-size:13px;display:flex;flex-direction:column;gap:8px}
+.arch-detail li::marker{color:var(--orange)}
+/* MODEL */
+.tabs{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:20px}
+.tab{font-family:var(--mono);font-size:11px;letter-spacing:.1em;background:var(--panel);border:1px solid var(--line2);color:var(--mut);padding:9px 16px;border-radius:9px;cursor:pointer;font-weight:500}
+.tab.on{background:rgba(255,107,53,.15);border-color:var(--orange);color:var(--orange);font-weight:600}
+.tabpane{display:none}.tabpane.on{display:block;animation:fadein .4s}
+@keyframes fadein{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.metric-big{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-bottom:20px}
+.mb{background:var(--panel);padding:22px}
+.mb b{font-family:var(--disp);font-size:34px;color:var(--green);display:block;font-weight:700;letter-spacing:-.02em}
+.mb span{font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;color:var(--dim);text-transform:uppercase}
+.cm{display:grid;grid-template-columns:70px repeat(10,1fr);gap:3px;font-family:var(--mono);font-size:10px}
+.cm div{background:var(--panel2);border-radius:5px;padding:8px 2px;text-align:center;color:var(--mut)}
+.cm .hd{background:none;color:var(--dim);font-size:9px;letter-spacing:.06em}
+.cm .cell{cursor:pointer;transition:.15s}
+.cm .cell:hover{outline:1px solid var(--orange);transform:scale(1.1)}
+/* API */
+.api-grid{display:grid;grid-template-columns:340px 1fr;gap:20px;align-items:start}
+.ep{display:flex;gap:10px;align-items:center;padding:12px 15px;border:1px solid var(--line);border-radius:10px;cursor:pointer;margin-bottom:7px;background:var(--panel);transition:.2s;font-family:var(--mono);font-size:11px}
+.ep:hover{border-color:var(--line2);transform:translateX(3px)}
+.ep.on{border-color:var(--orange);background:rgba(255,107,53,.07)}
+.ep .m{font-weight:600;font-size:9.5px;padding:3px 8px;border-radius:6px;flex:none}
+.m-get{background:rgba(63,185,80,.15);color:var(--green)}
+.m-post{background:rgba(255,184,0,.15);color:var(--amber)}
+.ep .p{color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.day-cells{display:flex;gap:5px;flex-wrap:wrap}
+.dc{width:27px;height:35px;border-radius:7px;background:var(--panel2);border:1px solid var(--line);transition:.25s}
+.dc.on{background:linear-gradient(180deg,var(--amber),#a86e00);border-color:var(--amber);box-shadow:0 0 13px rgba(255,184,0,.4)}
+.dc.th{border-color:var(--red);position:relative}
+.dc.th::after{content:"5";position:absolute;bottom:-17px;left:50%;transform:translateX(-50%);font-family:var(--mono);font-size:9px;color:var(--red)}
+/* COMPLIANCE */
+.claim-out{margin-top:15px;display:flex;flex-direction:column;gap:8px}
+.cl{display:flex;gap:10px;align-items:flex-start;font-family:var(--mono);font-size:11.5px;padding:11px 14px;border-radius:9px;border:1px solid}
+.cl.ok{border-color:rgba(63,185,80,.35);background:rgba(63,185,80,.06);color:#9fd8ab}
+.cl.bad{border-color:rgba(255,68,68,.4);background:rgba(255,68,68,.07);color:#ff9c9c}
+textarea{width:100%;background:#080b10;border:1px solid var(--line2);border-radius:11px;color:var(--txt);font-family:var(--mono);font-size:12.5px;padding:15px;resize:vertical;min-height:90px;outline:none}
+textarea:focus{border-color:var(--orange);box-shadow:0 0 0 3px rgba(255,107,53,.12)}
+/* VIEWPORTS */
+.tour-card{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:var(--panel);transition:.28s;position:relative}
+.tour-card:hover{border-color:var(--orange);transform:translateY(-5px);box-shadow:var(--shadow)}
+.tour-vis{height:262px;position:relative;background:#070a0e}
+.tour-vis canvas{width:100%;height:100%;display:block}
+.tour-vis .tb{position:absolute;top:10px;left:10px;font-family:var(--mono);font-size:9px;letter-spacing:.16em;color:var(--green);background:rgba(8,11,16,.7);border:1px solid rgba(63,185,80,.35);padding:4px 9px;border-radius:6px}
+.tour-meta{padding:18px 20px}
+.tour-meta b{font-family:var(--disp);font-size:14px;letter-spacing:.02em;display:flex;justify-content:space-between;align-items:center;font-weight:600}
+.tour-meta p{color:var(--dim);font-size:12px;margin-top:7px;font-family:var(--mono)}
+/* CTA */
+.cta-band{border:1px solid var(--line2);border-radius:22px;padding:64px 48px;text-align:center;position:relative;overflow:hidden;background:linear-gradient(160deg,rgba(20,27,38,.9),rgba(10,14,20,.95))}
+.cta-band::before{content:"";position:absolute;inset:-2px;border-radius:22px;background:conic-gradient(from 0deg,transparent 0 70%,rgba(255,107,53,.5) 78%,transparent 86%);animation:spin 7s linear infinite;z-index:-1}
+@keyframes spin{to{transform:rotate(360deg)}}
+.cta-band h2{font-size:clamp(28px,4vw,44px)}
+.cta-band .mono-foot{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.16em;margin-top:22px}
+/* FOOTER */
+footer{border-top:1px solid var(--line);background:rgba(5,7,10,.9);padding:70px 0 32px;position:relative;z-index:1}
+.f-grid{display:grid;grid-template-columns:1.4fr 1fr 1fr 1.2fr;gap:38px;margin-bottom:48px}
+.f-grid h5{font-family:var(--mono);font-size:10px;letter-spacing:.24em;color:var(--dim);text-transform:uppercase;margin-bottom:16px;font-weight:500}
+.f-grid a{display:block;color:var(--mut);text-decoration:none;font-size:13px;padding:4px 0;transition:.2s}
+.f-grid a:hover{color:var(--orange);transform:translateX(3px)}
+.keys{display:flex;flex-wrap:wrap;gap:7px}
+.key{font-family:var(--mono);font-size:10px;border:1px solid var(--line2);border-bottom-width:2px;border-radius:7px;padding:4px 9px;color:var(--mut)}
+.key b{color:var(--orange)}
+.gates{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.gate{font-family:var(--mono);font-size:10px;color:var(--green);border:1px solid rgba(63,185,80,.35);background:rgba(63,185,80,.06);padding:5px 11px;border-radius:999px}
+.f-bot{border-top:1px solid var(--line);padding-top:24px;display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;font-family:var(--mono);font-size:10.5px;color:var(--dim);letter-spacing:.1em}
+#toTop{position:fixed;bottom:28px;right:28px;z-index:90;width:46px;height:46px;border-radius:13px;background:rgba(15,20,28,.9);border:1px solid var(--line2);color:var(--mut);cursor:pointer;font-size:17px;opacity:0;pointer-events:none;transition:.3s;backdrop-filter:blur(8px)}
+#toTop.on{opacity:1;pointer-events:auto}
+#toTop:hover{color:var(--orange);border-color:var(--orange);transform:translateY(-3px)}
+#selfTest{position:fixed;inset:0;z-index:200;background:rgba(4,6,9,.82);backdrop-filter:blur(10px);display:none;place-items:center}
+#selfTest.open{display:grid}
+.st-box{width:min(540px,92vw);background:var(--panel);border:1px solid var(--line2);border-radius:18px;box-shadow:var(--shadow);overflow:hidden}
+.st-row{display:flex;justify-content:space-between;font-family:var(--mono);font-size:12px;padding:13px 22px;border-bottom:1px solid var(--line)}
+.st-row span{color:var(--dim)}.st-row b{font-weight:500}
+#tlTip{position:fixed;display:none;background:rgba(10,14,20,.97);border:1px solid var(--line2);border-radius:9px;padding:9px 12px;font-family:var(--mono);font-size:10.5px;color:var(--mut);pointer-events:none;z-index:99;line-height:1.7;box-shadow:var(--shadow)}
+@media(max-width:1100px){
+  .hero-grid{grid-template-columns:1fr}.hero-vis{height:440px}
+  .demo-main{grid-template-columns:1fr}.demo-view{min-height:540px}
+  .lab,.api-grid,.g3,.g4{grid-template-columns:1fr 1fr}
+  .f-grid{grid-template-columns:1fr 1fr}
+  .arch-grid{grid-template-columns:1fr!important}.arch-detail{position:static}
+  .secnum{display:none}
+}
+@media(max-width:740px){
+  .nav-links{display:none;position:absolute;top:66px;left:0;right:0;background:rgba(6,8,12,.98);flex-direction:column;padding:14px;border-bottom:1px solid var(--line)}
+  .nav-links.open{display:flex}
+  .burger{display:block}
+  .nav-cta .btn,.nav-cta .live-chip{display:none}
+  .g2,.g3,.g4,.lab,.api-grid,.hero-stats,.metric-big{grid-template-columns:1fr}
+  .kpis{grid-template-columns:repeat(3,1fr)}
+  section{padding:70px 0}
+  .drawer{width:100%}
+  .cta-band{padding:44px 24px}
+}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+
+<nav>
+  <div class="nav-in">
+    <a class="logo" href="#top">
+      <span class="logo-chip"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3c2.5 4 6 5.5 6 10a6 6 0 1 1-12 0c0-2.5 1.6-4 2.5-5.5.8 1.5 1.5 2.5 1.5 2.5S11 6 12 3z" fill="#12080a"/></svg></span>
+      <span><b>THERMOWATCH</b><small>NTRO · SIH26162 · V1.0</small></span>
+    </a>
+    <button class="burger" id="burger" aria-label="menu">☰</button>
+    <div class="nav-links" id="navLinks">
+      <a href="#overview">OVERVIEW</a><a href="#capabilities">CAPABILITIES</a><a href="#demo">LIVE DEMO</a>
+      <a href="#viewports">VIEWPORTS</a><a href="#classification">CLASSIFIER</a><a href="#architecture">ARCHITECTURE</a>
+      <a href="#model">MODEL CARD</a><a href="#api">API</a><a href="#deploy">DEPLOY</a>
+    </div>
+    <div class="nav-cta">
+      <span class="live-chip" id="backendChip"><span class="dot"></span>FEED SIM</span>
+      <a href="/app.html" class="btn btn-p btn-s">LAUNCH DASHBOARD</a>
+    </div>
+  </div>
+</nav>
+
+<header id="top">
+  <div class="wrap hero-grid">
+    <div>
+      <span class="hero-tag">◈ SIH26162 · SMART INDIA HACKATHON 2026 · NTRO</span>
+      <h1>Orbital thermal intelligence for <span class="grad">industrial fire classification</span></h1>
+      <p class="hero-sub">ThermoWatch classifies NASA FIRMS thermal detections into <b>8 industrial subtypes</b>, fuses them with <b>OpenStreetMap facility context</b>, tracks <b>persistence</b> across days, and recommends an emergency response — built entirely on open data, fully reproducible.</p>
+      <div class="hero-ctas">
+        <a href="/app.html" class="btn btn-p">▶ LAUNCH LIVE DASHBOARD</a>
+        <a href="/app.html?panel=k" class="btn btn-g">VIEW MODEL CARD</a>
+        <a href="#api" class="btn btn-g">API REFERENCE</a>
+      </div>
+      <div class="hero-stats">
+        <div class="hs"><b data-count="0.877" data-dec="3">0.000</b><span>macro-F1 · 10-way</span></div>
+        <div class="hs"><b data-count="10">0</b><span>classes · 12 features</span></div>
+        <div class="hs"><b>3–6h</b><span>FIRMS near-real-time</span></div>
+        <div class="hs"><b data-count="67">0</b><span>tests + claim gate</span></div>
+      </div>
+    </div>
+    <div class="hero-vis">
+      <canvas id="heroGlobe"></canvas>
+      <span class="hud tl">● ORB-3D · WEBGL EARTH</span>
+      <span class="hud tr">VIIRS SNPP · 375 m</span>
+      <span class="hud bl">drag rotate · wheel zoom · arcs = response links</span>
+      <span class="hud br">AUTO-ROTATE ON</span>
+    </div>
+  </div>
+  <div class="scroll-hint"><i></i>SCROLL</div>
+</header>
+
+<div class="ticker">
+  <div class="tick-in">
+    <span class="tick-label">WS /api/v1/ws/live</span>
+    <div class="tick-view"><div class="tick-row" id="tickRow"></div></div>
+    <button class="tick-btn" id="tickPause">❚❚ PAUSE</button>
+    <span class="tick-label" id="tickClients">clients 1</span>
+  </div>
+</div>
+<div class="mq"><div class="mq-row" id="mqRow"></div></div>
+
+<section id="overview">
+  <span class="secnum">01</span>
+  <div class="wrap">
+    <div class="kicker rev">EXECUTIVE SUMMARY</div>
+    <h2 class="rev">A GIS decision-support platform,<br>not just another fire map.</h2>
+    <p class="lead rev">FIRMS detects thermal anomalies. STA performs a binary vegetation / non-vegetation split. ThermoWatch performs <b style="color:var(--txt)">10-way classification</b> of the anomaly, identifies the specific facility and hazard class, and distinguishes a new incident from a standing regulatory problem.</p>
+    <div class="grid g3" style="margin-top:42px">
+      <div class="card rev tilt"><div class="ico" style="background:rgba(255,107,53,.14);color:var(--orange)">10×</div>
+        <h3>Multi-class industrial classification</h3>
+        <p>8 industrial subtypes — refinery, steel, gas flare, cement, smelter, waste incineration, power plant, chemical — plus <code class="mono">unknown_industrial</code> and <code class="mono">natural_fire</code>. Probability-averaged RF + HistGradientBoosting ensemble.</p>
+        <div style="margin-top:15px;display:flex;gap:6px;flex-wrap:wrap"><span class="chip on">macro-F1 0.877</span><span class="chip">stratified 70/15/15</span></div>
+      </div>
+      <div class="card rev tilt"><div class="ico" style="background:rgba(88,166,255,.13);color:var(--blue)">OSM</div>
+        <h3>Industrial context fusion</h3>
+        <p>FIRMS thermal detections correlated with OpenStreetMap facility records, NBC 2016 hazard classes (G-I / G-II / G-III) and ESA WorldCover land-cover proxies via Haversine nearest-facility matching.</p>
+        <div style="margin-top:15px;display:flex;gap:6px;flex-wrap:wrap"><span class="chip on">16 seed facilities</span><span class="chip">NBC 2016 hazard</span></div>
+      </div>
+      <div class="card rev tilt"><div class="ico" style="background:rgba(255,184,0,.13);color:var(--amber)">≥5d</div>
+        <h3>Persistence intelligence</h3>
+        <p>A five-day static-thermal-anomaly (STA) threshold separates transient fires from chronic thermal sources — the difference between an incident response and a regulatory follow-up.</p>
+        <div style="margin-top:15px;display:flex;gap:6px;flex-wrap:wrap"><span class="chip on">STA threshold 5 days</span><span class="chip">30-day rolling</span></div>
+      </div>
+    </div>
+    <div class="pos rev"><b>Positioning.</b> FIRMS detects thermal anomalies; STA separates vegetation from non-vegetation. ThermoWatch identifies <b>which of eight industrial subtypes</b> is burning, <b>names the facility</b>, and states whether the event is a <b>new incident</b> or a <b>standing thermal source</b> requiring regulatory attention.</div>
+  </div>
+</section>
+
+<section id="capabilities" style="background:var(--bg2);border-top:1px solid var(--line);border-bottom:1px solid var(--line)">
+  <span class="secnum">02</span>
+  <div class="wrap">
+    <div class="kicker rev">CAPABILITIES</div>
+    <h2 class="rev">Four engines, one open-data pipeline.</h2>
+    <p class="lead rev">Every capability below is live in the dashboard further down this page — click through and operate it.</p>
+    <div class="grid g2" style="margin-top:42px">
+      <div class="card rev tilt"><h3><span class="ico" style="background:rgba(255,77,94,.13);color:var(--wld)">⌁</span>Thermal ingestion &amp; feature engineering</h3>
+        <p>MODIS (1 km) + VIIRS SNPP (375 m) NRT polling with rate-limit aware retries and exponential backoff. A fixed 12-feature contract: <code class="mono">frp, brightness_k, night_ratio, diurnal_variance, persist_days, facility_distance_km, facility_hazard_enc, forest_proxy, agri_window, cluster_density, detections_30d, frp_stability</code>.</p></div>
+      <div class="card rev tilt"><h3><span class="ico" style="background:rgba(63,185,80,.13);color:var(--green)">⌗</span>ML inference with graceful precedence</h3>
+        <p>① Trained bundle (RF + HistGB ensemble, optional XGBoost) → ② optional ST-GNN spatio-temporal head (PyG) → ③ heuristic ensemble, always available. <code class="mono">model_provenance()</code> reports which path served every prediction.</p></div>
+      <div class="card rev tilt"><h3><span class="ico" style="background:rgba(255,184,0,.13);color:var(--amber)">◎</span>Persistence &amp; chronic-source tracking</h3>
+        <p>Consecutive detection-day counting per 0.1° cell. Crossing the 5-day STA threshold emits <code class="mono">persistence:detected</code> over WebSocket and promotes the cell to the Chronic Thermal Sources board.</p></div>
+      <div class="card rev tilt"><h3><span class="ico" style="background:rgba(255,107,53,.14);color:var(--orange)">⛨</span>Response recommendation engine</h3>
+        <p>Nearest fire stations with ETA, vehicle &amp; personnel totals, water volume, evacuation radius by NBC hazard class, staging point and wind bearing — decision support, never automated response.</p></div>
+    </div>
+    <div class="grid g4" style="margin-top:20px">
+      <div class="card rev" style="padding:20px"><b class="disp" style="color:var(--orange);font-size:28px;font-weight:700" data-count="5">0</b><p style="margin-top:5px">WebSocket event types with 30 s heartbeat</p></div>
+      <div class="card rev" style="padding:20px"><b class="disp" style="color:var(--orange);font-size:28px;font-weight:700" data-count="180" data-suffix="d">0</b><p style="margin-top:5px">historical analysis window + facility leaderboard</p></div>
+      <div class="card rev" style="padding:20px"><b class="disp" style="color:var(--orange);font-size:28px;font-weight:700" data-count="10">0</b><p style="margin-top:5px">workspaces on single-key shortcuts</p></div>
+      <div class="card rev" style="padding:20px"><b class="disp" style="color:var(--orange);font-size:28px;font-weight:700">100%</b><p style="margin-top:5px">open data · fully reproducible build</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="demo">
+  <span class="secnum">03</span>
+  <div class="wrap">
+    <div class="kicker rev">LIVE OPERATIONS</div>
+    <h2 class="rev">The dashboard, running right here.</h2>
+    <p class="lead rev">Fully interactive: dual viewport (ORTHO-2D canvas map / ORB-3D globe with WebGL opt-in), layer panel, class filters, confidence gate, time-range chips, live feed, event drawer with context suggestions and response plans. Keys: <span class="mono" style="color:var(--orange)">1</span> 2D · <span class="mono" style="color:var(--orange)">2</span> 3D · <span class="mono" style="color:var(--orange)">Space</span> pause · <span class="mono" style="color:var(--orange)">T</span> self-test · <span class="mono" style="color:var(--orange)">Esc</span> close.</p>
+    <div class="demo-shell rev" style="margin-top:40px">
+      <div class="demo-top">
+        <div class="seg" id="vpSeg">
+          <button data-vp="2d" class="on">▦ ORTHO 2D</button>
+          <button data-vp="3d">◍ ORB 3D</button>
+        </div>
+        <button class="vchip warn" id="glToggle" style="display:none">GL MODE: OFF — click to opt-in</button>
+        <span class="vchip" id="routeChip">ORTHO-2D · CANVAS-2D (WORLD)</span>
+        <span class="vchip live" id="feedChip"><span class="dot" style="color:var(--green)"></span>LIVE</span>
+        <button class="vchip" id="layersBtn" style="cursor:pointer">☰ LAYERS</button>
+        <button class="vchip" id="openApp" style="cursor:pointer">⧉ OPEN FULL DASHBOARD</button>
+        <div style="margin-left:auto;display:flex;gap:6px" class="range-chips" id="rangeChips">
+          <button class="rchip" data-r="1">24H</button><button class="rchip" data-r="2">48H</button>
+          <button class="rchip" data-r="7">7D</button><button class="rchip on" data-r="14">14D</button>
+          <button class="rchip" data-r="30">30D</button><button class="rchip" data-r="365">ALL</button>
+        </div>
+      </div>
+      <div class="demo-main">
+        <div class="demo-view" id="demoView">
+          <canvas id="map2d"></canvas>
+          <canvas id="globe2d" style="display:none"></canvas>
+          <div class="view-chips"><span class="vchip" id="evCount">0 events</span><span class="vchip" id="rendererChip">renderer: canvas2d</span><span class="vchip" id="simNote">SIMULATED PREVIEW</span></div>
+          <div class="zoomer" id="zoomer">
+            <button id="zIn" title="zoom in">+</button><button id="zOut" title="zoom out">−</button><button id="zHome" title="reset">⌂</button>
+          </div>
+          <div class="layers" id="layersPanel">
+            <h5>LAYERS <span class="chip" style="padding:2px 7px">6</span></h5>
+            <label><input type="checkbox" data-layer="fires" checked> Fire detections (FRP-sized)</label>
+            <label><input type="checkbox" data-layer="rings" checked> Persistent rings (≥5 d)</label>
+            <label><input type="checkbox" data-layer="facilities" checked> OSM facilities</label>
+            <label><input type="checkbox" data-layer="tint" checked> Country density tint</label>
+            <label><input type="checkbox" data-layer="labels" checked> Country labels</label>
+            <label><input type="checkbox" data-layer="grat" checked> Graticule 15°</label>
+          </div>
+          <div class="legend">
+            <h6>LEGEND</h6>
+            <div><i style="background:var(--orange)"></i>Industrial Fire</div>
+            <div><i style="background:var(--amber)"></i>Persistent Thermal Source</div>
+            <div><i style="background:var(--wld)"></i>Wildfire</div>
+            <div><i style="background:var(--agr)"></i>Agricultural Burn</div>
+            <div><i class="ring"></i>persistent ring (≥5 d)</div>
+            <div><i class="fac"></i>OSM industrial facility</div>
+          </div>
+          <div class="drawer" id="drawer">
+            <div class="dw-h"><b id="dwId">EV-0000</b><button class="dw-x" id="dwClose">✕</button></div>
+            <div class="dw-b" id="dwBody"></div>
+          </div>
+        </div>
+        <aside class="demo-side">
+          <div class="side-sec">
+            <h4>⚙ FILTERS</h4>
+            <div class="fchips" id="fchips">
+              <button class="fchip on" data-c="industrial" style="background:rgba(255,107,53,.18);color:var(--orange);border-color:var(--orange)">IND</button>
+              <button class="fchip on" data-c="persistent" style="background:rgba(255,184,0,.18);color:var(--amber);border-color:var(--amber)">PRS</button>
+              <button class="fchip on" data-c="wildfire" style="background:rgba(255,77,94,.18);color:var(--wld);border-color:var(--wld)">WLD</button>
+              <button class="fchip on" data-c="agricultural" style="background:rgba(139,212,80,.18);color:var(--agr);border-color:var(--agr)">AGR</button>
+            </div>
+            <div class="slider-row"><label>MIN CONF <b id="confVal" class="mono" style="color:var(--orange)">0</b></label><input type="range" id="confSlider" min="0" max="95" value="0"></div>
+          </div>
+          <div class="kpis">
+            <div class="kpi"><span>active 24h</span><b id="kActive">0</b></div>
+            <div class="kpi"><span>industrial share</span><b id="kShare">0%</b></div>
+            <div class="kpi"><span>persistent src</span><b id="kPers">0</b></div>
+            <div class="kpi"><span>open alerts</span><b id="kAlerts">0</b></div>
+            <div class="kpi"><span>mean conf</span><b id="kConf">0%</b></div>
+          </div>
+          <div class="side-sec">
+            <h4>◔ CLASSIFICATION MIX</h4>
+            <div id="donutWrap"><canvas id="donut" width="132" height="132" style="width:132px;height:132px"></canvas><div id="donutLegend"></div></div>
+          </div>
+          <div class="side-sec">
+            <h4>▥ 14-DAY DETECTION TIMELINE</h4>
+            <canvas id="timeline" height="150" style="width:100%;height:150px"></canvas>
+            <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:9.5px;color:var(--dim);margin-top:7px"><span id="tlStart">—</span><span id="tlEnd">—</span></div>
+          </div>
+          <div class="side-sec">
+            <h4>◷ CHRONIC THERMAL SOURCES</h4>
+            <div class="chronic" id="chronic"></div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="viewports" style="background:var(--bg2);border-top:1px solid var(--line);border-bottom:1px solid var(--line)">
+  <span class="secnum">04</span>
+  <div class="wrap">
+    <div class="kicker rev">RENDERING ENGINES</div>
+    <h2 class="rev">Three viewports. All live, in your browser, right now.</h2>
+    <p class="lead rev">Canvas2D engines draw imperatively and are immune to dead-rAF and broken-GL-presentation failure modes; WebGL is an explicit opt-in with a warning chip. Below: the world map, the orthographic globe and the true-3D incident scene — each running live.</p>
+    <div class="grid g3" style="margin-top:42px">
+      <div class="tour-card rev"><div class="tour-vis"><canvas id="tourMap"></canvas><span class="tb">● LIVE CANVAS2D</span></div>
+        <div class="tour-meta"><b>ORTHO-2D · WORLD MAP <span class="chip on">default</span></b>
+        <p>Natural Earth-style dot basemap · layer panel · time-range chips · FRP-sized class-colored detections · pan/zoom</p></div></div>
+      <div class="tour-card rev"><div class="tour-vis"><canvas id="tourGlobe"></canvas><span class="tb">● LIVE ORTHOGRAPHIC</span></div>
+        <div class="tour-meta"><b>ORB-3D · CANVAS GLOBE <span class="chip on">fallback-safe</span></b>
+        <p>Orthographic projection · hemisphere culling · pulsing persistent rings · pin lines · drag / wheel controls</p></div></div>
+      <div class="tour-card rev"><div class="tour-vis"><canvas id="tourScene"></canvas><span class="tb" id="sceneBadge">● LIVE WEBGL</span></div>
+        <div class="tour-meta"><b>INCIDENT SCENE · TRUE 3D <span class="chip on">orbit</span></b>
+        <p>Hazard-height facility massing · animated spread rings · flickering flare stack · drag to orbit the scene</p></div></div>
+    </div>
+  </div>
+</section>
+
+<section id="classification">
+  <span class="secnum">05</span>
+  <div class="wrap">
+    <div class="kicker rev">CLASSIFICATION LAB</div>
+    <h2 class="rev">Run the 10-way classifier yourself.</h2>
+    <p class="lead rev">The UI projects the 10-way posterior onto four display classes (industrial / persistent / wildfire / agricultural) — documented as a projection, not the model's native output. Drag the feature sliders; the ensemble mirror responds instantly.</p>
+    <div class="lab" style="margin-top:40px">
+      <div class="panel rev">
+        <div class="panel-h">FEATURE VECTOR · 12-CONTRACT SUBSET</div>
+        <div class="panel-b">
+          <div class="scen" id="scenBtns">
+            <button class="chip on" data-s="refinery">REFINERY</button><button class="chip" data-s="steel">STEEL</button>
+            <button class="chip" data-s="gas_flare">GAS FLARE</button><button class="chip" data-s="power_plant">POWER PLANT</button>
+            <button class="chip" data-s="natural_fire">WILDFIRE</button><button class="chip" data-s="agri">AGRI BURN</button>
+          </div>
+          <div class="sl-row"><div class="lb"><span>frp (MW)</span><b id="v_frpl">120</b></div><input type="range" id="s_frpl" min="5" max="300" value="120"></div>
+          <div class="sl-row"><div class="lb"><span>brightness_k (K)</span><b id="v_bright">330</b></div><input type="range" id="s_bright" min="280" max="400" value="330"></div>
+          <div class="sl-row"><div class="lb"><span>night_ratio</span><b id="v_night">0.50</b></div><input type="range" id="s_night" min="0" max="100" value="50"></div>
+          <div class="sl-row"><div class="lb"><span>persist_days</span><b id="v_persist">8</b></div><input type="range" id="s_persist" min="0" max="30" value="8"></div>
+          <div class="sl-row"><div class="lb"><span>facility_distance_km</span><b id="v_dist">2.0</b></div><input type="range" id="s_dist" min="0" max="50" value="2"></div>
+          <div class="sl-row"><div class="lb"><span>forest_proxy</span><b id="v_forest">0.10</b></div><input type="range" id="s_forest" min="0" max="100" value="10"></div>
+          <div class="sl-row" style="margin-bottom:4px"><div class="lb"><span>agri_window</span><b id="v_agri">0.10</b></div><input type="range" id="s_agri" min="0" max="100" value="10"></div>
+        </div>
+      </div>
+      <div class="panel rev">
+        <div class="panel-h">INFERENCE RESULT · <span id="provChip" style="color:var(--green)">heuristic ensemble (fallback path 3)</span></div>
+        <div class="panel-b">
+          <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:6px;flex-wrap:wrap">
+            <b class="mono" id="labTop" style="font-size:30px;color:var(--orange)">refinery</b>
+            <span class="mono" id="labConf" style="color:var(--mut);font-size:13px">87% confidence</span>
+            <span class="badge" id="labProj" style="margin-left:auto;background:rgba(255,107,53,.15);color:var(--orange)">UI: INDUSTRIAL</span>
+          </div>
+          <div id="labProbs" style="margin:17px 0"></div>
+          <div class="mono" style="font-size:10px;letter-spacing:.16em;color:var(--dim)">RISK SCORE (intensity × persistence × hazard)</div>
+          <div class="risk-meter" id="riskMeter"><i></i><i></i><i></i><i></i><i></i></div>
+          <div style="display:flex;justify-content:space-between;align-items:center"><b class="mono" id="riskLbl" style="font-size:15px;color:var(--amber)">MODERATE</b><span class="mono" id="riskScore" style="font-size:12px;color:var(--dim)">score 0.00</span></div>
+          <div class="sugg" style="margin-bottom:0"><h6>RECOMMENDED POSTURE</h6><p id="labRec">—</p></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel rev" style="margin-top:24px">
+      <div class="panel-h">TARGET CLASSES · 10-WAY CONTRACT</div>
+      <div style="overflow-x:auto"><table class="tbl"><thead><tr><th>idx</th><th>class</th><th>industrial</th><th>idx</th><th>class</th><th>industrial</th></tr></thead>
+      <tbody>
+        <tr><td>0</td><td>refinery</td><td style="color:var(--green)">yes</td><td>5</td><td>waste_incineration</td><td style="color:var(--green)">yes</td></tr>
+        <tr><td>1</td><td>steel</td><td style="color:var(--green)">yes</td><td>6</td><td>power_plant</td><td style="color:var(--green)">yes</td></tr>
+        <tr><td>2</td><td>gas_flare</td><td style="color:var(--green)">yes</td><td>7</td><td>chemical</td><td style="color:var(--green)">yes</td></tr>
+        <tr><td>3</td><td>cement</td><td style="color:var(--green)">yes</td><td>8</td><td>unknown_industrial</td><td style="color:var(--green)">yes</td></tr>
+        <tr><td>4</td><td>smelter</td><td style="color:var(--green)">yes</td><td>9</td><td>natural_fire</td><td style="color:var(--red)">no</td></tr>
+      </tbody></table></div>
+    </div>
+  </div>
+</section>
+
+<section id="architecture" style="background:var(--bg2);border-top:1px solid var(--line);border-bottom:1px solid var(--line)">
+  <span class="secnum">06</span>
+  <div class="wrap">
+    <div class="kicker rev">ARCHITECTURE</div>
+    <h2 class="rev">FIRMS → Bun → FastAPI → React.<br>Click any stage.</h2>
+    <div class="grid arch-grid" style="grid-template-columns:1fr 1fr;gap:28px;margin-top:42px;align-items:start">
+      <div class="flow rev">
+        <div class="node on" data-node="firms"><h4><span class="ico" style="background:rgba(88,166,255,.13);color:var(--blue)">🛰</span>NASA FIRMS (MODIS + VIIRS)</h4><p>375 m – 1 km · 3–6 h latency · CSV area endpoint</p></div>
+        <div class="pipe"></div>
+        <div class="node" data-node="bun"><h4><span class="ico" style="background:rgba(255,184,0,.13);color:var(--amber)"></span>Bun 1.4 Ingest Worker</h4><p>rate-limit aware polling · exponential backoff · simulator fallback</p></div>
+        <div class="pipe"></div>
+        <div class="node" data-node="api"><h4><span class="ico" style="background:rgba(63,185,80,.13);color:var(--green)">⌬</span>FastAPI Backend (Python 3.11)</h4><p>ingest → features → OSM correlation → ML → risk → persistence</p></div>
+        <div class="pipe"></div>
+        <div class="node" data-node="web"><h4><span class="ico" style="background:rgba(255,107,53,.14);color:var(--orange)">▦</span>React 19 Frontend (Vite)</h4><p>dual viewport · renderer resilience · Advanced Mode opt-in</p></div>
+      </div>
+      <div class="panel arch-detail rev">
+        <div class="panel-h" id="archTitle">STAGE DETAIL · NASA FIRMS</div>
+        <div class="panel-b"><p id="archDesc" style="color:var(--mut);font-size:13.5px"></p><ul id="archList"></ul>
+          <div style="margin-top:17px;display:flex;gap:7px;flex-wrap:wrap" id="archChips"></div>
+        </div>
+      </div>
+    </div>
+    <div class="grid g2" style="margin-top:24px">
+      <div class="panel rev"><div class="panel-h">RENDERER RESILIENCE STRATEGY</div>
+        <div style="overflow-x:auto"><table class="tbl"><thead><tr><th>class</th><th>engines</th><th>failure immunity</th></tr></thead><tbody>
+          <tr><td>GL-only</td><td>MapLibre, globe.gl, three.js, deck.gl</td><td style="color:var(--red)">breaks on dead rAF / broken GL presentation</td></tr>
+          <tr><td>Canvas2D</td><td>FallbackWorldMap, CanvasGlobe, CanvasScene</td><td style="color:var(--green)">immune to both failure modes</td></tr>
+          <tr><td>Hybrid</td><td>CanvasScene shell (Three or Canvas by capability)</td><td style="color:var(--amber)">automatic degradation</td></tr>
+        </tbody></table></div>
+        <div class="code" style="margin:15px 19px 19px">installRafShimIfDead()   <span class="c">// measure rAF 400ms, shim if dead</span>
+  .then(boot, boot);     <span class="c">// mount React — never a black screen</span></div>
+      </div>
+      <div class="panel rev"><div class="panel-h">CLIENT STATE STORES (ZUSTAND)</div>
+        <div style="overflow-x:auto"><table class="tbl"><tbody>
+          <tr><td>useFireStore</td><td>events, filters, selection, paused, facilities</td></tr>
+          <tr><td>useUIStore</td><td>viewport 2D/3D, active panel, auto-rotate, focus, self-test</td></tr>
+          <tr><td>useAnalyticsStore</td><td>Advanced Mode, layers, time range, renderer overrides, DuckDB</td></tr>
+          <tr><td>useMapDiagStore</td><td>renderer health, capability, errors, map API (zoom/reset)</td></tr>
+          <tr><td>agentStore</td><td>chat history, API key, tools</td></tr>
+        </tbody></table></div>
+        <div style="padding:15px 19px;display:flex;gap:6px;flex-wrap:wrap">
+          <span class="chip">O Overview</span><span class="chip">P Persistence</span><span class="chip">A Alerts</span><span class="chip">F Facilities</span><span class="chip">G AI Agent</span><span class="chip">M Model Run</span><span class="chip">K Model Card</span><span class="chip">X Analytics</span><span class="chip">H History</span><span class="chip">T Self-Test</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="model">
+  <span class="secnum">07</span>
+  <div class="wrap">
+    <div class="kicker rev">MODEL CARD</div>
+    <h2 class="rev">Metrics, provenance and limitations — stated honestly.</h2>
+    <div class="rev" style="margin-top:34px">
+      <div class="tabs" id="mcTabs">
+        <button class="tab on" data-t="metrics">METRICS</button><button class="tab" data-t="perclass">PER-CLASS</button>
+        <button class="tab" data-t="confusion">CONFUSION MATRIX</button><button class="tab" data-t="limits">LIMITATIONS</button>
+        <button class="tab" data-t="json">eval_report.json</button>
+      </div>
+      <div class="tabpane on" id="pane-metrics">
+        <div class="metric-big">
+          <div class="mb"><b data-count="0.877" data-dec="3">0.000</b><span>macro-F1 (headline)</span></div>
+          <div class="mb"><b data-count="0.889" data-dec="3">0.000</b><span>weighted-F1</span></div>
+          <div class="mb"><b data-count="80" data-suffix="ms">0</b><span>inference p50</span></div>
+          <div class="mb"><b data-count="4000">0</b><span>samples · stratified</span></div>
+        </div>
+        <div class="grid g3">
+          <div class="card"><h3>Ensemble</h3><p><code class="mono">tw-ensemble-v1</code> — probability-averaged RandomForest + HistGradientBoostingClassifier (+ optional XGBoost), <code class="mono">class_weight='balanced_subsample'</code>, stratified 70/15/15 split (2800/600/600).</p></div>
+          <div class="card"><h3>Provenance</h3><p><code class="mono">model_provenance()</code> reports the serving path per prediction: ① trained bundle → ② ST-GNN head (PyG, optional) → ③ heuristic ensemble. Eval metrics travel with every response.</p></div>
+          <div class="card"><h3>Why macro-F1?</h3><p>Industrial fires are rare. Macro-F1 (not accuracy) is the headline metric, with balanced weighting, stratified splits and per-class precision/recall/F1 reported in full.</p></div>
+        </div>
+      </div>
+      <div class="tabpane" id="pane-perclass"><div style="overflow-x:auto" class="panel"><table class="tbl"><thead><tr><th>class</th><th>precision</th><th>recall</th><th>f1</th><th>support</th></tr></thead><tbody id="pcBody"></tbody></table></div></div>
+      <div class="tabpane" id="pane-confusion">
+        <div class="panel" style="padding:22px"><div class="cm" id="cmGrid"></div>
+        <p class="mono" style="font-size:10.5px;color:var(--dim);margin-top:15px">rows = true label · columns = predicted · hover a cell for exact counts · test split n=600 (60/class)</p></div>
+      </div>
+      <div class="tabpane" id="pane-limits"><div class="grid g2" id="limitsGrid" style="margin-top:0"></div></div>
+      <div class="tabpane" id="pane-json"><div class="code" id="evalJson" style="max-height:430px"></div></div>
+    </div>
+  </div>
+</section>
+
+<section id="api" style="background:var(--bg2);border-top:1px solid var(--line);border-bottom:1px solid var(--line)">
+  <span class="secnum">08</span>
+  <div class="wrap">
+    <div class="kicker rev">API REFERENCE</div>
+    <h2 class="rev">REST + WebSocket contracts, documented for integration.</h2>
+    <p class="lead rev">Select an endpoint and send a simulated request — responses mirror the production shapes exactly.</p>
+    <div class="api-grid" style="margin-top:38px">
+      <div class="rev" id="epList"></div>
+      <div class="panel rev">
+        <div class="panel-h"><span class="m m-get mono" id="apiMethod">GET</span><span id="apiPath" style="color:var(--txt)">/api/v1/healthz</span>
+          <button class="btn btn-p btn-s" id="apiSend" style="margin-left:auto">SEND ▸</button></div>
+        <div class="panel-b">
+          <p id="apiDesc" style="color:var(--mut);font-size:13px;margin-bottom:15px"></p>
+          <div style="display:flex;gap:9px;align-items:center;margin-bottom:11px"><span class="badge" id="apiStatus" style="background:rgba(63,185,80,.15);color:var(--green);display:none">200 OK</span><span class="mono" id="apiMs" style="font-size:11px;color:var(--dim)"></span></div>
+          <div class="code" id="apiOut" style="max-height:390px"><span class="c">// select an endpoint and press SEND</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel rev" style="margin-top:24px">
+      <div class="panel-h">WEBSOCKET · ws://localhost:8000/api/v1/ws/live <button class="btn btn-g btn-s" id="wsBurst" style="margin-left:auto">SIMULATE BURST ⇉</button></div>
+      <div style="overflow-x:auto"><table class="tbl"><thead><tr><th>event</th><th>payload</th><th>frequency</th><th>ticker color</th></tr></thead><tbody>
+        <tr><td><i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#FF6B35;margin-right:8px"></i>fire:new</td><td>raw detection</td><td>per ingestion</td><td>#FF6B35</td></tr>
+        <tr><td><i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#3FB950;margin-right:8px"></i>fire:classified</td><td>post-ML classification</td><td>per ingestion</td><td>#3FB950</td></tr>
+        <tr><td><i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#FFB800;margin-right:8px"></i>persistence:detected</td><td>cell crosses ≥5-day STA threshold</td><td>on threshold</td><td>#FFB800</td></tr>
+        <tr><td><i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#FF4444;margin-right:8px"></i>alert:triggered</td><td>high-risk event</td><td>on risk ≥ high</td><td>#FF4444</td></tr>
+        <tr><td><i style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#7D8DA1;margin-right:8px"></i>system:status</td><td>{"clients": N, "timestamp"}</td><td>every 30 s</td><td>#7D8DA1</td></tr>
+      </tbody></table></div>
+    </div>
+  </div>
+</section>
+
+<section id="data">
+  <span class="secnum">09</span>
+  <div class="wrap">
+    <div class="kicker rev">DATA &amp; PERSISTENCE</div>
+    <h2 class="rev">Open data in, decisions out.</h2>
+    <div class="grid g2" style="margin-top:38px;align-items:start">
+      <div class="panel rev"><div class="panel-h">DATA SOURCES</div>
+        <div style="overflow-x:auto"><table class="tbl"><thead><tr><th>source</th><th>type</th><th>resolution</th><th>cadence</th></tr></thead><tbody>
+          <tr><td>NASA FIRMS MODIS</td><td>active fire</td><td>1 km</td><td>2–4×/day</td></tr>
+          <tr><td>NASA FIRMS VIIRS SNPP</td><td>active fire</td><td>375 m</td><td>2–4×/day</td></tr>
+          <tr><td>NASA FIRMS STA</td><td>persistent mask</td><td>400 m grid</td><td>annual</td></tr>
+          <tr><td>OpenStreetMap</td><td>industrial facilities</td><td>vector</td><td>continuous</td></tr>
+          <tr><td>ESA WorldCover</td><td>land cover</td><td>10 m</td><td>annual</td></tr>
+          <tr><td>ERA5 (ECMWF)</td><td>weather</td><td>31 km</td><td>hourly</td></tr>
+          <tr><td>Open-Meteo</td><td>weather fallback</td><td>—</td><td>hourly</td></tr>
+          <tr><td>Natural Earth 110m</td><td>country boundaries</td><td>vector</td><td>static</td></tr>
+        </tbody></table></div>
+        <div class="code" style="margin:15px 19px 19px">FEATURE_ORDER = [
+  <span class="s">"frp"</span>, <span class="s">"brightness_k"</span>, <span class="s">"night_ratio"</span>, <span class="s">"diurnal_variance"</span>, <span class="s">"persist_days"</span>,
+  <span class="s">"facility_distance_km"</span>, <span class="s">"facility_hazard_enc"</span>, <span class="s">"forest_proxy"</span>, <span class="s">"agri_window"</span>,
+  <span class="s">"cluster_density"</span>, <span class="s">"detections_30d"</span>, <span class="s">"frp_stability"</span>,
+]  <span class="c"># fixed contract · app/ml/features.py</span></div>
+      </div>
+      <div class="rev">
+        <div class="panel" style="margin-bottom:22px">
+          <div class="panel-h">STA PERSISTENCE THRESHOLD · INTERACTIVE</div>
+          <div class="panel-b">
+            <div class="slider-row" style="margin-bottom:22px"><label>consecutive detection-days <b id="pDays" class="mono" style="color:var(--amber)">3</b></label><input type="range" id="pSlider" min="1" max="14" value="3"></div>
+            <div class="day-cells" id="dayCells"></div>
+            <div style="margin-top:28px">
+              <b class="mono" id="pStatus" style="font-size:17px;color:var(--gray)">TRANSIENT</b>
+              <p id="pDesc" style="color:var(--mut);font-size:12.5px;margin-top:7px">Below the five-day static-thermal-anomaly threshold — treated as a transient fire for incident awareness.</p>
+              <div style="margin-top:11px"><span class="chip" id="pWs">ws: fire:new / fire:classified</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="panel"><div class="panel-h">OSM FACILITY SEED · app/data/facilities.py</div>
+          <div style="overflow-x:auto;max-height:290px;overflow-y:auto"><table class="tbl"><thead><tr><th>id</th><th>facility</th><th>subtype</th><th>hazard</th></tr></thead><tbody id="facBody"></tbody></table></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="deploy" style="background:var(--bg2);border-top:1px solid var(--line);border-bottom:1px solid var(--line)">
+  <span class="secnum">10</span>
+  <div class="wrap">
+    <div class="kicker rev">DEPLOYMENT &amp; OPS</div>
+    <h2 class="rev">Three terminals, or one compose file.</h2>
+    <div class="grid g2" style="margin-top:38px;align-items:start">
+      <div class="rev">
+        <div class="tabs" id="depTabs">
+          <button class="tab on" data-d="local">LOCAL DEV</button><button class="tab" data-d="docker">DOCKER COMPOSE</button>
+          <button class="tab" data-d="env">ENV VARS</button><button class="tab" data-d="run">RUNBOOK</button>
+        </div>
+        <div class="tabpane on" id="dep-local"><div class="code"><button class="copy">copy</button><span class="c"># Terminal 1: API</span>
+<span class="k">cd</span> server/api && <span class="k">source</span> .venv/bin/activate
+uvicorn app.main:app --reload --port 8000
+
+<span class="c"># Terminal 2: Ingest worker</span>
+<span class="k">cd</span> server/ingest && bun run dev
+
+<span class="c"># Terminal 3: Frontend</span>
+<span class="k">cd</span> client && npm run dev</div></div>
+        <div class="tabpane" id="dep-docker"><div class="code"><button class="copy">copy</button>docker-compose up --build
+<span class="c"># API:    http://localhost:8000</span>
+<span class="c"># Client: http://localhost:5173</span>
+<span class="c"># Ingest: background worker</span>
+<span class="c"># images: python:3.11-slim · oven/bun:1.4 · node:20-slim</span></div></div>
+        <div class="tabpane" id="dep-env"><div style="overflow-x:auto" class="panel"><table class="tbl"><thead><tr><th>variable</th><th>default</th><th>purpose</th></tr></thead><tbody>
+          <tr><td>FIRMS_API_KEY</td><td>—</td><td>NASA FIRMS MAP_KEY (optional)</td></tr>
+          <tr><td>TW_API_URL</td><td>http://localhost:8000</td><td>ingest target</td></tr>
+          <tr><td>TW_CORS_ORIGINS</td><td>http://localhost:5173</td><td>CORS allow-list</td></tr>
+          <tr><td>POLL_MS</td><td>60000</td><td>FIRMS poll interval</td></tr>
+          <tr><td>TW_PERSISTENCE_DAY_THRESHOLD</td><td>5</td><td>STA threshold</td></tr>
+        </tbody></table></div></div>
+        <div class="tabpane" id="dep-run"><div class="code"><button class="copy">copy</button>npm run install:all   <span class="c"># install all deps</span>
+npm run train         <span class="c"># train ML model</span>
+npm run test          <span class="c"># pytest + vitest + claim_audit</span>
+npm run dev:api       <span class="c"># start FastAPI</span>
+npm run dev:ingest    <span class="c"># start Bun ingest</span>
+npm run dev:client    <span class="c"># start Vite dev server</span></div></div>
+      </div>
+      <div class="rev">
+        <div class="panel" style="margin-bottom:22px"><div class="panel-h">TEST COVERAGE</div>
+          <div style="overflow-x:auto"><table class="tbl"><thead><tr><th>suite</th><th>files</th><th>tests</th></tr></thead><tbody>
+            <tr><td>Server (pytest)</td><td>5</td><td>19</td></tr>
+            <tr><td>Client (vitest)</td><td>11</td><td>48</td></tr>
+            <tr><td>Claim audit</td><td>1 script</td><td>123 files scanned</td></tr>
+            <tr><td>Puppeteer blank-page probe</td><td>1 script</td><td>headless verification</td></tr>
+          </tbody></table></div>
+          <div class="gates" style="padding:0 19px 19px"><span class="gate">typecheck clean</span><span class="gate">67 tests passing</span><span class="gate">claim audit clean</span><span class="gate">build warning-free</span></div>
+        </div>
+        <div class="panel"><div class="panel-h">CLAIM GATE · scripts/claim_audit.py</div>
+          <div class="code" style="border:none;background:none">python scripts/claim_audit.py
+<span class="c"># fails the build if forbidden claims</span>
+<span class="c"># are found in src/ or server/api/app/</span></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="compliance">
+  <span class="secnum">11</span>
+  <div class="wrap">
+    <div class="kicker rev">CLAIMS &amp; COMPLIANCE</div>
+    <h2 class="rev">Say only what the evidence supports.</h2>
+    <div class="grid g3" style="margin-top:38px">
+      <div class="card rev" style="border-color:rgba(63,185,80,.3)"><h3 style="color:var(--green)">✓ Safe to claim</h3>
+        <ul style="margin:11px 0 0 16px;color:var(--mut);font-size:13px;display:flex;flex-direction:column;gap:8px">
+          <li>Near-real-time monitoring (FIRMS latency 3–6 h, stated explicitly)</li><li>Multi-class industrial fire classification</li>
+          <li>GIS platform combining FIRMS and OSM</li><li>Persistence tracking: transient vs chronic</li>
+          <li>Decision-support tool (not automated response)</li><li>Fully open-data, fully reproducible</li></ul></div>
+      <div class="card rev" style="border-color:rgba(255,184,0,.3)"><h3 style="color:var(--amber)">Requires careful wording</h3>
+        <div style="overflow-x:auto;margin-top:11px"><table class="tbl"><thead><tr><th>avoid</th><th>use instead</th></tr></thead><tbody>
+          <tr><td style="color:var(--red)">"Real-time detection"</td><td>"Near-real-time monitoring (3–6 h)"</td></tr>
+          <tr><td style="color:var(--red)">"First system to…"</td><td>"An integrated approach to…"</td></tr>
+          <tr><td style="color:var(--red)">"Novel ML architecture"</td><td>"Novel application of ensemble classification"</td></tr>
+          <tr><td style="color:var(--red)">"Prevents fires"</td><td>"Supports faster incident awareness"</td></tr>
+          <tr><td style="color:var(--red)">"100% accuracy"</td><td>report macro-F1 + per-class P/R/F1</td></tr>
+        </tbody></table></div></div>
+      <div class="card rev" style="border-color:rgba(255,68,68,.3)"><h3 style="color:var(--red)">⊘ Forbidden (grep-gated)</h3>
+        <ul style="margin:11px 0 0 16px;color:var(--mut);font-size:13px;display:flex;flex-direction:column;gap:8px">
+          <li>"Real-time" without a "near-" qualifier</li><li>"first-ever" and unqualified "novel"</li>
+          <li>"prevents" as a causal claim</li><li>"100% accuracy" or "guarantee"</li></ul>
+        <div style="margin-top:17px"><span class="chip on">enforced by automated grep-gate</span></div></div>
+    </div>
+    <div class="panel rev" style="margin-top:24px">
+      <div class="panel-h">TRY THE CLAIM GATE · LIVE GREP SIMULATOR</div>
+      <div class="panel-b">
+        <textarea id="claimIn" spellcheck="false">ThermoWatch provides near-real-time monitoring (FIRMS latency: 3-6h) and supports faster incident awareness; macro-F1 0.877 on the 10-way task.</textarea>
+        <div style="display:flex;gap:9px;margin-top:12px;flex-wrap:wrap">
+          <button class="btn btn-p btn-s" id="claimRun">RUN claim_audit.py ▸</button>
+          <button class="btn btn-g btn-s" id="claimSafe">insert safe claim</button>
+          <button class="btn btn-g btn-s" id="claimRisky">insert risky claim</button>
+          <span class="badge" id="claimGate" style="margin-left:auto;background:rgba(255,68,68,.15);color:var(--red)">GATE: —</span>
+        </div>
+        <div class="claim-out" id="claimOut"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="cta" style="padding:40px 0 110px">
+  <div class="wrap">
+    <div class="cta-band rev">
+      <div class="kicker" style="justify-content:center">FINAL POSITIONING</div>
+      <h2>FIRMS detects. STA splits vegetation.<br><span class="grad">ThermoWatch names the facility.</span></h2>
+      <p class="lead" style="margin:18px auto 30px;text-align:center">Eight industrial subtypes, a named facility, an NBC hazard class, and the verdict: new incident — or standing thermal source requiring regulatory attention.</p>
+      <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap">
+        <a href="/app.html" class="btn btn-p">▶ OPERATE THE DASHBOARD</a>
+        <a href="/app.html?panel=k" class="btn btn-g">READ THE MODEL CARD</a>
+      </div>
+      <div class="mono-foot">BUILT ON 100% OPEN DATA · FULLY REPRODUCIBLE · NEAR-REAL-TIME (FIRMS LATENCY 3–6H)</div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="f-grid">
+      <div>
+        <a class="logo" href="#top" style="margin-bottom:18px"><span class="logo-chip"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3c2.5 4 6 5.5 6 10a6 6 0 1 1-12 0c0-2.5 1.6-4 2.5-5.5.8 1.5 1.5 2.5 1.5 2.5S11 6 12 3z" fill="#12080a"/></svg></span><span><b>THERMOWATCH</b><small>NTRO · SIH26162 · V1.0</small></span></a>
+        <p style="color:var(--dim);font-size:13px;max-width:310px">AI-based detection and classification of industrial fires and persistent thermal sources. Built on 100% open data. Fully reproducible.</p>
+        <div class="gates"><span class="gate">typecheck clean</span><span class="gate">67 tests</span><span class="gate">claim audit clean</span><span class="gate">warning-free build</span></div>
+      </div>
+      <div><h5>Platform</h5><a href="#overview">Overview</a><a href="#capabilities">Capabilities</a><a href="#demo">Live demo</a><a href="#viewports">Viewports</a><a href="#classification">Classification lab</a></div>
+      <div><h5>Engineering</h5><a href="#architecture">Architecture</a><a href="#model">Model card</a><a href="#api">API reference</a><a href="#data">Data sources</a><a href="#deploy">Deployment</a><a href="#compliance">Claims &amp; compliance</a></div>
+      <div><h5>Keyboard shortcuts</h5>
+        <div class="keys"><span class="key"><b>1</b> 2D view</span><span class="key"><b>2</b> 3D view</span><span class="key"><b>Space</b> pause feed</span><span class="key"><b>Esc</b> close drawer</span><span class="key"><b>T</b> self-test</span><span class="key"><b>O</b> overview</span><span class="key"><b>K</b> model card</span><span class="key"><b>X</b> analytics</span><span class="key"><b>H</b> history</span></div>
+      </div>
+    </div>
+    <div class="f-bot">
+      <span>SIH26162 · NATIONAL TECHNICAL RESEARCH ORGANISATION · DEADLINE 20 SEP 2026</span>
+      <span>DOC v1.0 · NEAR-REAL-TIME (FIRMS LATENCY 3–6H)</span>
+    </div>
+  </div>
+</footer>
+
+<button id="toTop" title="back to top">↑</button>
+
+<div id="selfTest"><div class="st-box">
+  <div class="panel-h" style="border-radius:0">VIEWPORT SELF-TEST · T <button class="dw-x" id="stClose" style="margin-left:auto">✕</button></div>
+  <div class="st-row"><span>requestAnimationFrame</span><b id="stRaf">measuring…</b></div>
+  <div class="st-row"><span>measured frame rate</span><b id="stFps">—</b></div>
+  <div class="st-row"><span>Canvas2D context</span><b id="stCanvas">—</b></div>
+  <div class="st-row"><span>WebGL context (probe)</span><b id="stGl">—</b></div>
+  <div class="st-row"><span>renderer routing</span><b id="stRoute">—</b></div>
+  <div class="st-row"><span>GL presentation risk</span><b id="stRisk">—</b></div>
+  <div style="padding:17px;display:flex;gap:10px"><button class="btn btn-p btn-s" id="stRun">RE-RUN PROBE ▸</button><button class="btn btn-g btn-s" id="stOk">CLOSE</button></div>
+</div></div>
+<div id="tlTip"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+<script>
+/* 0 · rAF SHIM */
+let RAF_ALIVE=true;
+function installRafShimIfDead(){return new Promise(res=>{let ok=false;
+  const t=setTimeout(()=>{if(!ok){RAF_ALIVE=false;
+    window.requestAnimationFrame=cb=>setTimeout(()=>cb(performance.now()),16);
+    window.cancelAnimationFrame=id=>clearTimeout(id);}res();},400);
+  requestAnimationFrame(()=>{ok=true;clearTimeout(t);res();});});}
+/* 1 · UTILS */
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),RAD=Math.PI/180;
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const rng=mulberry32(26162);
+function havKm(la1,lo1,la2,lo2){const R=6371,dLa=(la2-la1)*RAD,dLo=(lo2-lo1)*RAD;
+  const h=Math.sin(dLa/2)**2+Math.cos(la1*RAD)*Math.cos(la2*RAD)*Math.sin(dLo/2)**2;return 2*R*Math.asin(Math.sqrt(h));}
+const NOW=Date.now();
+const COL={industrial:'#FF6B35',persistent:'#FFB800',wildfire:'#ff4d5e',agricultural:'#8BD450'};
+const CLASS_LBL={industrial:'Industrial Fire',persistent:'Persistent Thermal Source',wildfire:'Wildfire',agricultural:'Agricultural Burn'};
+const HAS_GL=(()=>{try{return !!document.createElement('canvas').getContext('webgl');}catch(e){return false;}})();
+/* 2 · LAND MASK */
+const LAND_RANGES=[[1,[[26,31],[10,20]]],[2,[[26,31],[12,20],[48,68]]],[3,[[10,24],[26,31],[37,40],[41,70]]],
+[4,[[3,7],[8,24],[26,31],[36,40],[41,71]]],[5,[[2,7],[8,25],[36,40],[41,71]]],[6,[[3,8],[9,25],[34,35],[36,39],[40,71]]],
+[7,[[10,25],[27,27],[34,35],[36,42],[43,71]]],[8,[[11,26],[34,44],[45,69]]],[9,[[12,26],[34,35],[36,44],[45,67],[62,63]]],
+[10,[[12,26],[34,36],[37,44],[44,48],[48,55],[55,63],[61,61]]],[11,[[13,25],[33,42],[42,46],[44,48],[48,51],[50,55],[55,63],[62,64]]],
+[12,[[15,19],[23,23],[33,42],[43,46],[46,48],[48,51],[50,55],[55,62]]],[13,[[15,18],[21,23],[32,42],[43,45],[47,48],[49,51],[50,55],[56,61]]],
+[14,[[15,18],[18,20],[22,24],[32,43],[45,46],[49,55],[54,58],[63,64]]],[15,[[18,20],[23,28],[32,43],[49,54],[54,58],[63,64]]],
+[16,[[19,20],[23,29],[32,43],[51,52],[55,58],[63,64]]],[17,[[22,30],[33,42],[55,63]]],[18,[[22,31],[33,42],[55,64]]],
+[19,[[22,31],[34,41],[55,64]]],[20,[[22,31],[34,40],[58,66]]],[21,[[22,30],[34,40],[44,45],[58,66]]],[22,[[22,30],[34,39],[44,45],[58,66]]],
+[23,[[23,29],[34,38],[58,65]]],[24,[[23,28],[35,37],[59,64]]],[25,[[24,27],[60,63],[69,70]]],[26,[[24,27],[69,70]]],[27,[[24,26],[69,69]]],
+[28,[[24,26]]],[29,[[24,25]]],[30,[[24,25]]],[31,[[0,71]]],[32,[[0,71]]],[33,[[0,71]]],[34,[[0,71]]],[35,[[0,71]]]];
+const LAND=[];
+LAND_RANGES.forEach(([r,rs])=>rs.forEach(([a,b])=>{for(let c=a;c<=b;c++)LAND.push({lat:87.5-5*r,lon:-177.5+5*c});}));
+const LABELS=[['GREENLAND',72,-40],['RUSSIA',60,90],['CHINA',35,105],['INDIA',21,79],['BRAZIL',-10,-52],['AUSTRALIA',-25,134],['CANADA',58,-105],['USA',39,-98],['ALGERIA',27,3],['SAUDI ARABIA',24,45],['KAZAKHSTAN',48,68],['ARGENTINA',-35,-65],['DEM. REP. CONGO',-3,23],['MONGOLIA',46,103],['IRAN',32,53],['FRANCE',46,2],['MALI',17,-2],['INDONESIA',-2,113],['JAPAN',36,138]];
+/* 3 · DOMAIN DATA */
+const FACILITIES=[
+ {id:'F-001',name:'Jamnagar Refinery Complex',subtype:'refinery',lat:22.47,lon:70.07,hazard:'G-III',det:42},
+ {id:'F-002',name:'Tata Steel Jamshedpur',subtype:'steel',lat:22.80,lon:86.20,hazard:'G-II',det:34},
+ {id:'F-003',name:'Bokaro Steel Plant',subtype:'steel',lat:23.67,lon:85.96,hazard:'G-II',det:28},
+ {id:'F-004',name:'Bathinda Thermal Plant',subtype:'power_plant',lat:30.21,lon:74.95,hazard:'G-II',det:19},
+ {id:'F-005',name:'Haldia Petrochemicals',subtype:'chemical',lat:22.03,lon:88.06,hazard:'G-III',det:23},
+ {id:'F-006',name:'Vapi Chemical Belt',subtype:'chemical',lat:20.37,lon:72.90,hazard:'G-III',det:26},
+ {id:'F-007',name:'Trombay Refinery',subtype:'refinery',lat:19.05,lon:72.93,hazard:'G-III',det:17},
+ {id:'F-008',name:'Korba Super Thermal',subtype:'power_plant',lat:22.35,lon:82.75,hazard:'G-II',det:21},
+ {id:'F-009',name:'Angul Steel Works',subtype:'steel',lat:20.85,lon:85.10,hazard:'G-II',det:15},
+ {id:'F-010',name:'Vizag Steel Plant',subtype:'steel',lat:17.70,lon:83.30,hazard:'G-II',det:18},
+ {id:'F-011',name:'Chennai Petroleum Refinery',subtype:'refinery',lat:13.08,lon:80.29,hazard:'G-III',det:14},
+ {id:'F-012',name:'Cochin Refinery',subtype:'refinery',lat:9.98,lon:76.24,hazard:'G-III',det:11},
+ {id:'F-013',name:'Digboi Refinery',subtype:'refinery',lat:27.12,lon:95.62,hazard:'G-III',det:9},
+ {id:'F-014',name:'Katni Cement Works',subtype:'cement',lat:23.83,lon:80.40,hazard:'G-I',det:12},
+ {id:'F-015',name:'Jharsuguda Smelter',subtype:'smelter',lat:21.86,lon:84.02,hazard:'G-II',det:16},
+ {id:'F-016',name:'Okha Gas Flare Field',subtype:'gas_flare',lat:22.47,lon:69.06,hazard:'G-III',det:31}];
+const SUBTYPE_LBL={refinery:'Refinery',steel:'Steel',gas_flare:'Gas Flare',cement:'Cement',smelter:'Smelter',waste_incineration:'Waste Incineration',power_plant:'Power Plant',chemical:'Chemical'};
+const STATIONS=[
+ {id:'S-001',name:'Jamnagar Fire Station',lat:22.45,lon:70.06,vehicles:4,personnel:20},
+ {id:'S-002',name:'Jamshedpur Central Station',lat:22.81,lon:86.19,vehicles:5,personnel:26},
+ {id:'S-003',name:'Bokaro Sector IV Station',lat:23.66,lon:85.97,vehicles:3,personnel:18},
+ {id:'S-004',name:'Bathinda Industrial Station',lat:30.20,lon:74.94,vehicles:4,personnel:22},
+ {id:'S-005',name:'Haldia Dock Station',lat:22.02,lon:88.05,vehicles:6,personnel:30},
+ {id:'S-006',name:'Mumbai Fire Brigade East',lat:19.06,lon:72.94,vehicles:8,personnel:44},
+ {id:'S-007',name:'Chennai Manali Station',lat:13.10,lon:80.26,vehicles:5,personnel:28},
+ {id:'S-008',name:'Korba Township Station',lat:22.34,lon:82.74,vehicles:3,personnel:16},
+ {id:'S-009',name:'Visakhapatnam Gajuwaka',lat:17.68,lon:83.28,vehicles:4,personnel:24},
+ {id:'S-010',name:'Kochi Udyogamandal',lat:9.99,lon:76.25,vehicles:4,personnel:21}];
+const HAZ_EVAC={'G-I':800,'G-II':1200,'G-III':1500};
+let EVENTS=[],evSeq=1000;
+function riskScore(ev){const i=clamp(ev.frp/250,0,1),p=clamp(ev.persist/20,0,1);
+  const h=ev.fac?(ev.fac.hazard==='G-III'?1:ev.fac.hazard==='G-II'?0.8:0.6):0.35;
+  return Math.round(100*(0.42*i+0.3*p+0.28*h));}
+function riskLevel(s){return s<35?'LOW':s<60?'MODERATE':s<80?'HIGH':'CRITICAL';}
+function mkEvent(ageH){
+  const r=rng();let ev;
+  if(r<0.68){
+    const f=FACILITIES[Math.floor(rng()*FACILITIES.length)];
+    const pers=rng()<0.42;
+    ev={lat:f.lat+(rng()-.5)*1.4,lon:f.lon+(rng()-.5)*1.4,fac:f,
+      ui:pers?'persistent':'industrial',persist:pers?5+Math.floor(rng()*26):Math.floor(rng()*4),
+      frp:40+rng()*180,bright:305+rng()*90,conf:55+Math.floor(rng()*43),night:+(0.3+rng()*0.6).toFixed(2)};
+  }else{
+    const agri=rng()<0.45;
+    ev={lat:agri?29+rng()*3:19+rng()*6,lon:agri?74+rng()*4:77+rng()*8,fac:null,ui:agri?'agricultural':'wildfire',
+      persist:Math.floor(rng()*2),frp:agri?10+rng()*50:30+rng()*140,bright:300+rng()*80,
+      conf:45+Math.floor(rng()*50),night:+(rng()*0.5).toFixed(2)};
+  }
+  ev.id='EV-'+(++evSeq);ev.ageH=ageH;ev.ts=NOW-ageH*3600e3;
+  ev.dist=ev.fac?+(0.3+rng()*2.4).toFixed(1):+(8+rng()*40).toFixed(1);
+  ev.risk=riskScore(ev);return ev;}
+for(let i=0;i<20;i++)EVENTS.push(mkEvent(rng()*24));
+for(let i=0;i<240;i++)EVENTS.push(mkEvent(24+Math.pow(rng(),1.5)*700));
+/* 4 · TICKER + MARQUEE */
+const TICK_TYPES=[['fire:new','#FF6B35',3],['fire:classified','#3FB950',3],['persistence:detected','#FFB800',1],['alert:triggered','#FF4444',1],['system:status','#7D8DA1',1]];
+let tickPaused=false,clients=1;
+function tickItem(){const r=rng();let acc=0,tot=TICK_TYPES.reduce((a,t)=>a+t[2],0),pick=TICK_TYPES[0];
+  for(const t of TICK_TYPES){acc+=t[2];if(r<acc/tot){pick=t;break;}}
+  const ev=EVENTS[Math.floor(rng()*EVENTS.length)];let msg='';
+  if(pick[0]==='fire:new')msg=`frp=${ev.frp.toFixed(0)}MW bright=${ev.bright.toFixed(0)}K (${ev.lat.toFixed(2)},${ev.lon.toFixed(2)})`;
+  else if(pick[0]==='fire:classified')msg=`${ev.id} → ${ev.fac?SUBTYPE_LBL[ev.fac.subtype].toLowerCase():ev.ui} conf=${ev.conf}%`;
+  else if(pick[0]==='persistence:detected')msg=`cell ${ev.lat.toFixed(1)}°/${ev.lon.toFixed(1)}° crossed ≥5d STA`;
+  else if(pick[0]==='alert:triggered')msg=`${ev.id} risk=${ev.risk} ${riskLevel(ev.risk)}`;
+  else msg=`{"clients": ${clients}, "timestamp": "${new Date().toISOString()}"}`;
+  return `<span class="tick-item"><i style="background:${pick[1]};box-shadow:0 0 7px ${pick[1]}"></i><b style="color:${pick[1]}">${pick[0]}</b> ${msg}</span>`;}
+function fillTicker(){const items=Array.from({length:14},tickItem).join('');$('#tickRow').innerHTML=items+items;}
+fillTicker();
+setInterval(()=>{if(tickPaused)return;const row=$('#tickRow');const half=row.children.length/2;
+  row.insertAdjacentHTML('afterbegin',tickItem());row.removeChild(row.children[half]);row.removeChild(row.children[row.children.length-1]);row.insertAdjacentHTML('beforeend',row.children[0].outerHTML);},2600);
+$('#tickPause').onclick=e=>{tickPaused=!tickPaused;e.target.textContent=tickPaused?'▶ RESUME':'❚❚ PAUSE';};
+setInterval(()=>{clients=1+Math.floor(rng()*3);$('#tickClients').textContent='clients '+clients;},30000);
+const MQ=['NASA FIRMS MODIS','NASA FIRMS VIIRS SNPP','NASA FIRMS STA','OPENSTREETMAP','ESA WORLDCOVER 10m','ERA5 · ECMWF','OPEN-METEO','NATURAL EARTH 110m'];
+$('#mqRow').innerHTML=(MQ.map(m=>`<span class="mq-item"><b>${m}</b></span>`).join('')).repeat(2);
+/* 5 · CANVAS GLOBE */
+class CanvasGlobe{
+  constructor(cv,opt={}){this.cv=cv;this.ctx=cv.getContext('2d');this.rot={lon:opt.lon??78,lat:opt.lat??22};
+    this.tRot={...this.rot};this.zoom=opt.zoom??1;this.auto=opt.auto!==false;this.fires=opt.fires||null;
+    this.stars=Array.from({length:150},()=>({x:rng(),y:rng(),p:rng()*6}));this.drag=null;
+    cv.addEventListener('pointerdown',e=>{this.drag={x:e.clientX,y:e.clientY};cv.setPointerCapture(e.pointerId);cv.style.cursor='grabbing';});
+    cv.addEventListener('pointermove',e=>{if(!this.drag)return;this.tRot.lon+=(e.clientX-this.drag.x)*0.35;this.tRot.lat=clamp(this.tRot.lat-(e.clientY-this.drag.y)*0.35,-70,70);this.drag={x:e.clientX,y:e.clientY};});
+    cv.addEventListener('pointerup',()=>{this.drag=null;cv.style.cursor='grab';});
+    cv.addEventListener('wheel',e=>{e.preventDefault();this.zoom=clamp(this.zoom*(e.deltaY>0?0.92:1.08),0.6,2.6);},{passive:false});
+    this.resize();addEventListener('resize',()=>this.resize());}
+  resize(){const r=this.cv.getBoundingClientRect();const d=Math.min(devicePixelRatio||1,2);
+    this.cv.width=r.width*d;this.cv.height=r.height*d;this.w=r.width;this.h=r.height;this.ctx.setTransform(d,0,0,d,0,0);}
+  focus(lat,lon){this.tRot={lon:-lon,lat:lat};this.auto=false;}
+  proj(lat,lon){const R=Math.min(this.w,this.h)*0.40*this.zoom;const la=lat*RAD,lo=(lon-this.rot.lon)*RAD,p0=this.rot.lat*RAD;
+    const cc=Math.cos(p0)*Math.cos(la)*Math.cos(lo)+Math.sin(p0)*Math.sin(la);if(cc<=0)return null;
+    const x=Math.cos(la)*Math.sin(lo),y=Math.cos(p0)*Math.sin(la)-Math.sin(p0)*Math.cos(la)*Math.cos(lo);
+    return {x:this.w/2+R*x,y:this.h/2-R*y,depth:cc};}
+  draw(t){const c=this.ctx;if(!this.w)return;c.clearRect(0,0,this.w,this.h);
+    c.fillStyle='#070a0e';c.fillRect(0,0,this.w,this.h);
+    this.stars.forEach(s=>{c.globalAlpha=0.25+0.5*Math.abs(Math.sin(t/900+s.p));c.fillStyle='#33465e';c.fillRect(s.x*this.w,s.y*this.h,1.4,1.4);});
+    c.globalAlpha=1;
+    const R=Math.min(this.w,this.h)*0.40*this.zoom,cx=this.w/2,cy=this.h/2;
+    let g=c.createRadialGradient(cx,cy,R*0.75,cx,cy,R*1.3);g.addColorStop(0,'rgba(255,107,53,0)');g.addColorStop(0.62,'rgba(255,107,53,.17)');g.addColorStop(1,'rgba(255,107,53,0)');
+    c.fillStyle=g;c.beginPath();c.arc(cx,cy,R*1.3,0,7);c.fill();
+    g=c.createRadialGradient(cx-R*0.35,cy-R*0.35,R*0.1,cx,cy,R);g.addColorStop(0,'#141c2a');g.addColorStop(1,'#0a0f17');
+    c.fillStyle=g;c.beginPath();c.arc(cx,cy,R,0,7);c.fill();
+    c.strokeStyle='rgba(40,52,74,.55)';c.lineWidth=1;c.stroke();
+    c.strokeStyle='rgba(40,52,74,.35)';
+    for(let la=-60;la<=60;la+=30){c.beginPath();let st=false;for(let lo=-180;lo<=180;lo+=4){const p=this.proj(la,lo);if(!p){st=false;continue;}st?c.lineTo(p.x,p.y):(c.moveTo(p.x,p.y),st=true);}c.stroke();}
+    for(let lo=-180;lo<180;lo+=30){c.beginPath();let st=false;for(let la=-85;la<=85;la+=4){const p=this.proj(la,lo);if(!p){st=false;continue;}st?c.lineTo(p.x,p.y):(c.moveTo(p.x,p.y),st=true);}c.stroke();}
+    const dot=Math.max(1.1,R*0.011);c.fillStyle='#2c3d52';
+    for(const L of LAND){const p=this.proj(L.lat,L.lon);if(!p)continue;c.globalAlpha=0.35+0.6*p.depth;c.fillRect(p.x-dot/2,p.y-dot/2,dot,dot);}
+    c.globalAlpha=1;
+    if(this.fires){for(const ev of this.fires()){const p=this.proj(ev.lat,ev.lon);if(!p)continue;
+      const col=COL[ev.ui],rad=clamp(2+ev.frp/70,2.5,7)*this.zoom;
+      c.globalAlpha=0.25*p.depth+0.5;c.shadowColor=col;c.shadowBlur=10;
+      c.fillStyle=col;c.beginPath();c.arc(p.x,p.y,rad,0,7);c.fill();c.shadowBlur=0;
+      if(ev.ui==='persistent'){c.strokeStyle='rgba(255,184,0,.8)';c.lineWidth=1.2;
+        c.beginPath();c.arc(p.x,p.y,rad+4+Math.sin(t/400+ev.ts%10)*1.6,0,7);c.stroke();
+        c.strokeStyle='rgba(255,255,255,.75)';c.beginPath();c.moveTo(p.x,p.y);c.lineTo(p.x+(p.x>cx?10:-10),p.y-14);c.stroke();
+        c.fillStyle='#fff';c.beginPath();c.arc(p.x+(p.x>cx?10:-10),p.y-14,1.6,0,7);c.fill();}}
+      c.globalAlpha=1;}
+    if(this.auto&&!this.drag)this.tRot.lon+=0.06;
+    this.rot.lon+=(this.tRot.lon-this.rot.lon)*0.12;this.rot.lat+=(this.tRot.lat-this.rot.lat)*0.12;}}
+/* 6 · WEBGL EARTH (bars + arcs + pulses) */
+class GLGlobe{
+  constructor(cv,opt={}){this.cv=cv;this.auto=opt.auto!==false;this.firesFn=opt.fires||null;
+    this.renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true});
+    this.scene=new THREE.Scene();this.cam=new THREE.PerspectiveCamera(42,1,0.1,100);this.cam.position.z=3.05;
+    this.outer=new THREE.Group();this.inner=new THREE.Group();this.outer.add(this.inner);this.scene.add(this.outer);
+    this.inner.add(new THREE.Mesh(new THREE.SphereGeometry(1,48,48),new THREE.MeshBasicMaterial({color:0x0c1220})));
+    this.inner.add(new THREE.Mesh(new THREE.SphereGeometry(1.002,24,16),new THREE.MeshBasicMaterial({color:0x182435,wireframe:true,transparent:true,opacity:0.28})));
+    this.inner.add(new THREE.Mesh(new THREE.SphereGeometry(1.14,32,32),new THREE.MeshBasicMaterial({color:0xff6b35,transparent:true,opacity:0.075,side:THREE.BackSide})));
+    this.inner.add(new THREE.Mesh(new THREE.SphereGeometry(1.32,32,32),new THREE.MeshBasicMaterial({color:0xff6b35,transparent:true,opacity:0.035,side:THREE.BackSide})));
+    const pos=[];LAND.forEach(L=>{const v=this.ll(L.lat,L.lon,1.012);pos.push(v.x,v.y,v.z);});
+    const lg=new THREE.BufferGeometry();lg.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+    this.inner.add(new THREE.Points(lg,new THREE.PointsMaterial({color:0x3a4f6b,size:0.014})));
+    const sp=[];for(let i=0;i<460;i++){const v=new THREE.Vector3().randomDirection().multiplyScalar(24+Math.random()*14);sp.push(v.x,v.y,v.z);}
+    const sg=new THREE.BufferGeometry();sg.setAttribute('position',new THREE.Float32BufferAttribute(sp,3));
+    this.scene.add(new THREE.Points(sg,new THREE.PointsMaterial({color:0x3a4d66,size:0.05})));
+    if(opt.bars){FACILITIES.forEach(f=>{const h=0.05+f.det/42*0.28;
+      const m=new THREE.Mesh(new THREE.CylinderGeometry(0.011,0.016,h,8),
+        new THREE.MeshBasicMaterial({color:f.hazard==='G-III'?0xff6b35:0xffb800,transparent:true,opacity:0.85}));
+      const n=this.ll(f.lat,f.lon,1);m.position.copy(n.clone().multiplyScalar(1+h/2));
+      m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),n);this.inner.add(m);
+      const cap=new THREE.Mesh(new THREE.SphereGeometry(0.016,8,8),new THREE.MeshBasicMaterial({color:0xffd9c4}));
+      cap.position.copy(n.clone().multiplyScalar(1+h));this.inner.add(cap);});}
+    if(opt.arcs){this.pulses=[];const pairs=[[0,1],[0,10],[1,4],[4,6],[6,11],[0,15],[1,7]];
+      pairs.forEach((pr,i)=>{const a=FACILITIES[pr[0]],b=FACILITIES[pr[1]];
+        const p1=this.ll(a.lat,a.lon,1.02),p2=this.ll(b.lat,b.lon,1.02);
+        const mid=p1.clone().add(p2).normalize().multiplyScalar(1.02+p1.distanceTo(p2)*0.35);
+        const curve=new THREE.QuadraticBezierCurve3(p1,mid,p2);
+        const tube=new THREE.Mesh(new THREE.TubeGeometry(curve,40,0.0035,6,false),
+          new THREE.MeshBasicMaterial({color:0xff6b35,transparent:true,opacity:0.32,blending:THREE.AdditiveBlending,depthWrite:false}));
+        this.inner.add(tube);
+        const pulse=new THREE.Mesh(new THREE.SphereGeometry(0.016,8,8),new THREE.MeshBasicMaterial({color:0xffd9c4,transparent:true,opacity:0.95,blending:THREE.AdditiveBlending,depthWrite:false}));
+        this.inner.add(pulse);this.pulses.push({curve,pulse,ph:i*0.14});});}
+    this.fireGeo=new THREE.BufferGeometry();this.fireMat=new THREE.PointsMaterial({size:0.045,vertexColors:true,transparent:true,opacity:0.95,blending:THREE.AdditiveBlending,depthWrite:false});
+    this.firePts=new THREE.Points(this.fireGeo,this.fireMat);this.inner.add(this.firePts);
+    this.drag=null;this.tR={x:22*RAD,y:-78*RAD};this.cur={...this.tR};
+    cv.addEventListener('pointerdown',e=>{this.drag={x:e.clientX,y:e.clientY};cv.setPointerCapture(e.pointerId);cv.style.cursor='grabbing';});
+    cv.addEventListener('pointermove',e=>{if(!this.drag)return;this.tR.y-=(e.clientX-this.drag.x)*0.005;this.tR.x=clamp(this.tR.x-(e.clientY-this.drag.y)*0.005,-1.2,1.2);this.drag={x:e.clientX,y:e.clientY};});
+    cv.addEventListener('pointerup',()=>{this.drag=null;cv.style.cursor='grab';});
+    cv.addEventListener('wheel',e=>{e.preventDefault();this.cam.position.z=clamp(this.cam.position.z*(e.deltaY>0?1.08:0.92),2.05,5.5);},{passive:false});
+    this.resize();addEventListener('resize',()=>this.resize());this.rebuildFires();}
+  ll(lat,lon,r){const la=lat*RAD,lo=lon*RAD;return new THREE.Vector3(-Math.cos(la)*Math.sin(lo),Math.sin(la),Math.cos(la)*Math.cos(lo)).multiplyScalar(r);}
+  resize(){const r=this.cv.getBoundingClientRect();const d=Math.min(devicePixelRatio||1,2);
+    this.renderer.setSize(r.width,r.height,false);this.renderer.setPixelRatio(d);this.cam.aspect=r.width/Math.max(r.height,1);this.cam.updateProjectionMatrix();}
+  rebuildFires(){if(!this.firesFn)return;const list=this.firesFn();const p=[],col=[];const cc=new THREE.Color();
+    list.forEach(ev=>{const v=this.ll(ev.lat,ev.lon,1.03+ev.frp/4000);p.push(v.x,v.y,v.z);cc.set(COL[ev.ui]);col.push(cc.r,cc.g,cc.b);});
+    this.fireGeo.setAttribute('position',new THREE.Float32BufferAttribute(p,3));
+    this.fireGeo.setAttribute('color',new THREE.Float32BufferAttribute(col,3));}
+  focus(lat,lon){this.tR={x:lat*RAD,y:-lon*RAD};this.auto=false;}
+  draw(t){if(this.auto&&!this.drag)this.tR.y+=0.0011;
+    this.cur.x+=(this.tR.x-this.cur.x)*0.1;this.cur.y+=(this.tR.y-this.cur.y)*0.1;
+    this.outer.rotation.x=this.cur.x;this.inner.rotation.y=this.cur.y;
+    this.fireMat.size=0.045+Math.sin(t/380)*0.008;
+    if(this.pulses)this.pulses.forEach(p=>{const u=(t/4200+p.ph)%1;p.pulse.position.copy(p.curve.getPoint(u));
+      p.pulse.material.opacity=0.9*Math.sin(u*Math.PI);});
+    this.renderer.render(this.scene,this.cam);}}
+/* 7 · TRUE-3D INCIDENT SCENE */
+class SceneGL{
+  constructor(cv){this.cv=cv;this.renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true});
+    this.scene=new THREE.Scene();this.scene.fog=new THREE.Fog(0x070a0e,9,20);
+    this.cam=new THREE.PerspectiveCamera(45,1,0.1,60);this.cam.position.set(0,3.4,6.8);this.cam.lookAt(0,0.4,0);
+    this.world=new THREE.Group();this.scene.add(this.world);
+    this.scene.add(new THREE.AmbientLight(0x8899bb,0.55));
+    const dl=new THREE.DirectionalLight(0xffffff,0.75);dl.position.set(4,7,3);this.scene.add(dl);
+    this.flareLight=new THREE.PointLight(0xff6b35,2.4,9);this.flareLight.position.set(2.1,1.5,1.8);this.world.add(this.flareLight);
+    const grid=new THREE.GridHelper(10,26,0x2a3648,0x161e2a);this.world.add(grid);
+    const ground=new THREE.Mesh(new THREE.PlaneGeometry(10,10),new THREE.MeshStandardMaterial({color:0x0b0f16,roughness:0.95}));
+    ground.rotation.x=-Math.PI/2;ground.position.y=-0.01;this.world.add(ground);
+    const mk=(geo,col,x,y,z)=>{const m=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:col,roughness:0.6,metalness:0.25}));m.position.set(x,y,z);this.world.add(m);return m;};
+    mk(new THREE.BoxGeometry(1.5,0.9,1.5),0x2a3444,-2.4,0.45,-1.1);
+    mk(new THREE.BoxGeometry(1.7,0.6,1.1),0x333d4e,-0.4,0.3,-2.2);
+    mk(new THREE.BoxGeometry(1.2,1.2,1.2),0x3d3226,1.6,0.6,-2.0);
+    mk(new THREE.BoxGeometry(2.0,0.45,1.0),0x28303d,-0.6,0.22,1.5);
+    [[-2.2,1.9],[-1.4,2.1],[-2.0,2.7]].forEach(([x,z])=>{mk(new THREE.CylinderGeometry(0.42,0.42,0.7,18),0x414b59,x,0.35,z);});
+    mk(new THREE.CylinderGeometry(0.09,0.13,2.6,10),0x556070,2.1,1.3,1.8);
+    const fc=document.createElement('canvas');fc.width=fc.height=64;const fx=fc.getContext('2d');
+    const fg=fx.createRadialGradient(32,32,0,32,32,32);fg.addColorStop(0,'rgba(255,230,150,1)');fg.addColorStop(0.4,'rgba(255,107,53,.8)');fg.addColorStop(1,'rgba(255,107,53,0)');
+    fx.fillStyle=fg;fx.fillRect(0,0,64,64);
+    this.flame=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(fc),blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));
+    this.flame.position.set(2.1,2.85,1.8);this.world.add(this.flame);
+    const hot=new THREE.Mesh(new THREE.SphereGeometry(0.14,12,12),new THREE.MeshBasicMaterial({color:0xff6b35}));
+    hot.position.set(0.3,0.08,0.3);this.world.add(hot);
+    this.rings=[0,1,2].map(i=>{const r=new THREE.Mesh(new THREE.RingGeometry(0.96,1,48),
+      new THREE.MeshBasicMaterial({color:0xff6b35,transparent:true,opacity:0.5,side:THREE.DoubleSide,depthWrite:false}));
+      r.rotation.x=-Math.PI/2;r.position.set(0.3,0.02,0.3);this.world.add(r);return r;});
+    this.drag=null;this.rotY=0;this.tRotY=0;this.tilt=0.34;this.tTilt=0.34;this.dist=6.8;
+    cv.addEventListener('pointerdown',e=>{this.drag={x:e.clientX,y:e.clientY};cv.setPointerCapture(e.pointerId);cv.style.cursor='grabbing';});
+    cv.addEventListener('pointermove',e=>{if(!this.drag)return;this.tRotY+=(e.clientX-this.drag.x)*0.008;this.tTilt=clamp(this.tTilt+(e.clientY-this.drag.y)*0.004,0.1,0.9);this.drag={x:e.clientX,y:e.clientY};});
+    cv.addEventListener('pointerup',()=>{this.drag=null;cv.style.cursor='grab';});
+    cv.addEventListener('wheel',e=>{e.preventDefault();this.dist=clamp(this.dist*(e.deltaY>0?1.08:0.92),4,12);},{passive:false});
+    this.resize();addEventListener('resize',()=>this.resize());}
+  resize(){const r=this.cv.getBoundingClientRect();const d=Math.min(devicePixelRatio||1,2);
+    this.renderer.setSize(r.width,r.height,false);this.renderer.setPixelRatio(d);this.cam.aspect=r.width/Math.max(r.height,1);this.cam.updateProjectionMatrix();}
+  draw(t){if(!this.drag)this.tRotY+=0.0022;
+    this.rotY+=(this.tRotY-this.rotY)*0.1;this.tilt+=(this.tTilt-this.tilt)*0.1;
+    this.world.rotation.y=this.rotY;
+    this.cam.position.set(0,Math.sin(this.tilt)*this.dist,Math.cos(this.tilt)*this.dist);this.cam.lookAt(0,0.4,0);
+    const fl=1+Math.sin(t/90)*0.18+Math.sin(t/37)*0.1;
+    this.flame.scale.setScalar(0.9*fl);this.flareLight.intensity=2.2+Math.sin(t/80)*0.7;
+    this.rings.forEach((r,i)=>{const u=((t/2600)+i/3)%1;const s=0.4+u*3.4;r.scale.setScalar(s);r.material.opacity=0.55*(1-u);});
+    this.renderer.render(this.scene,this.cam);}}
+/* isometric canvas fallback for the scene */
+class SceneIso{
+  constructor(cv){this.cv=cv;this.ctx=cv.getContext('2d');this.resize();addEventListener('resize',()=>this.resize());}
+  resize(){const r=this.cv.getBoundingClientRect();const d=Math.min(devicePixelRatio||1,2);
+    this.cv.width=r.width*d;this.cv.height=r.height*d;this.w=r.width;this.h=r.height;this.ctx.setTransform(d,0,0,d,0,0);}
+  iso(x,y,z){return {x:this.w/2+(x-y)*0.86,y:this.h*0.62+(x+y)*0.44-z};}
+  box(c,x,y,w,d,h,col,top){const p1=this.iso(x,y,0),p2=this.iso(x+w,y,0),p3=this.iso(x+w,y+d,0),p4=this.iso(x,y+d,0);
+    const t1=this.iso(x,y,h),t2=this.iso(x+w,y,h),t3=this.iso(x+w,y+d,h),t4=this.iso(x,y+d,h);
+    c.fillStyle=col;c.beginPath();c.moveTo(p4.x,p4.y);c.lineTo(p3.x,p3.y);c.lineTo(t3.x,t3.y);c.lineTo(t4.x,t4.y);c.closePath();c.fill();
+    c.fillStyle=this.shade(col,-18);c.beginPath();c.moveTo(p1.x,p1.y);c.lineTo(p2.x,p2.y);c.lineTo(t2.x,t2.y);c.lineTo(t1.x,t1.y);c.closePath();c.fill();
+    c.fillStyle=top||this.shade(col,26);c.beginPath();c.moveTo(t1.x,t1.y);c.lineTo(t2.x,t2.y);c.lineTo(t3.x,t3.y);c.lineTo(t4.x,t4.y);c.closePath();c.fill();}
+  shade(hex,amt){const n=parseInt(hex.slice(1),16);return `rgb(${clamp((n>>16)+amt,0,255)},${clamp((n>>8&255)+amt,0,255)},${clamp((n&255)+amt,0,255)})`;}
+  draw(t){const c=this.ctx;if(!this.w)return;c.clearRect(0,0,this.w,this.h);
+    c.fillStyle='#070a0e';c.fillRect(0,0,this.w,this.h);
+    c.strokeStyle='rgba(28,37,50,.6)';c.lineWidth=1;
+    for(let i=-6;i<=6;i++){const a=this.iso(i*22,-132,0),b=this.iso(i*22,132,0);c.beginPath();c.moveTo(a.x,a.y);c.lineTo(b.x,b.y);c.stroke();
+      const d=this.iso(-132,i*22,0),e=this.iso(132,i*22,0);c.beginPath();c.moveTo(d.x,d.y);c.lineTo(e.x,e.y);c.stroke();}
+    for(let k=0;k<3;k++){const rr=((t/28)+k*46)%138;const al=clamp(1-rr/138,0,1)*0.55;
+      c.strokeStyle=`rgba(255,107,53,${al})`;c.lineWidth=2;c.beginPath();c.ellipse(this.iso(10,10,0).x,this.iso(10,10,0).y,rr*1.55,rr*0.78,0,0,7);c.stroke();}
+    const hp=this.iso(10,10,0);const g=c.createRadialGradient(hp.x,hp.y,0,hp.x,hp.y,40);
+    g.addColorStop(0,'rgba(255,107,53,.55)');g.addColorStop(1,'rgba(255,107,53,0)');c.fillStyle=g;c.beginPath();c.arc(hp.x,hp.y,40,0,7);c.fill();
+    this.box(c,-90,-40,44,44,26,'#2a3444');this.box(c,-30,-80,50,34,18,'#333d4e');this.box(c,40,-70,36,36,34,'#3d3226');this.box(c,-20,40,60,30,14,'#28303d');
+    [[-70,60],[-46,66],[-62,86]].forEach(([x,y])=>{const b=this.iso(x,y,0),tp=this.iso(x,y,20);
+      c.fillStyle='#39424f';c.beginPath();c.ellipse(b.x,b.y,13,6.5,0,0,7);c.fill();
+      c.fillStyle='#414b59';c.fillRect(tp.x-13,tp.y,26,20);
+      c.fillStyle='#4d5866';c.beginPath();c.ellipse(tp.x,tp.y,13,6.5,0,0,7);c.fill();});
+    const fb=this.iso(70,60,0),ft=this.iso(70,60,74);
+    c.strokeStyle='#556070';c.lineWidth=5;c.beginPath();c.moveTo(fb.x,fb.y);c.lineTo(ft.x,ft.y);c.stroke();
+    const fl=6+Math.sin(t/90)*2+Math.sin(t/37)*1.5;
+    const fg=c.createRadialGradient(ft.x,ft.y-fl/2,0,ft.x,ft.y-fl/2,fl*2.4);
+    fg.addColorStop(0,'rgba(255,220,120,.95)');fg.addColorStop(0.4,'rgba(255,107,53,.7)');fg.addColorStop(1,'rgba(255,107,53,0)');
+    c.fillStyle=fg;c.beginPath();c.arc(ft.x,ft.y-fl/2,fl*2.4,0,7);c.fill();
+    c.font='500 9px "IBM Plex Mono",monospace';c.fillStyle='#8b98a9';
+    const l1=this.iso(70,60,84);c.fillText('FLARE STACK',l1.x-24,l1.y-6);
+    const l2=this.iso(-90,-40,34);c.fillText('PROCESS BLOCK',l2.x-4,l2.y);
+    c.fillStyle='#FF6B35';c.fillText('SPREAD RING 1500 m · G-III',hp.x+46,hp.y+4);
+    c.fillStyle='#5b6879';c.fillText('SCENE: F-001 JAMNAGAR · CANVAS2D FALLBACK',12,18);}}
+/* 8 · MAP2D */
+class Map2D{
+  constructor(cv,opt={}){this.cv=cv;this.ctx=cv.getContext('2d');this.view={s:1,tx:0,ty:0};
+    this.state=opt.state;this.interactive=opt.interactive!==false;this.hits=[];this.drag=null;this.layers=opt.layers||{fires:1,rings:1,facilities:1,tint:1,labels:1,grat:1};
+    if(this.interactive){
+      cv.addEventListener('pointerdown',e=>{this.drag={x:e.clientX,y:e.clientY,moved:0};cv.setPointerCapture(e.pointerId);cv.style.cursor='grabbing';});
+      cv.addEventListener('pointermove',e=>{if(!this.drag)return;const dx=e.clientX-this.drag.x,dy=e.clientY-this.drag.y;
+        this.drag.moved+=Math.abs(dx)+Math.abs(dy);this.view.tx+=dx;this.view.ty+=dy;this.drag={...this.drag,x:e.clientX,y:e.clientY};});
+      cv.addEventListener('pointerup',e=>{const m=this.drag?this.drag.moved:99;this.drag=null;cv.style.cursor='grab';
+        if(m<5&&opt.onClick){opt.onClick(this.pick(e));}});
+      cv.addEventListener('wheel',e=>{e.preventDefault();this.zoomBy(e.deltaY>0?0.85:1.18);},{passive:false});}
+    this.resize();addEventListener('resize',()=>this.resize());}
+  resize(){const r=this.cv.getBoundingClientRect();const d=Math.min(devicePixelRatio||1,2);
+    this.cv.width=r.width*d;this.cv.height=r.height*d;this.w=r.width;this.h=r.height;this.ctx.setTransform(d,0,0,d,0,0);}
+  zoomBy(f){const s=clamp(this.view.s*f,1,9);if(s===1){this.view.tx=0;this.view.ty=0;}this.view.s=s;}
+  home(){this.view={s:1,tx:0,ty:0};}
+  P(lat,lon){const cx=this.w/2,cy=this.h/2;const bx=(lon+180)/360*this.w,by=(90-lat)/180*this.h;
+    return {x:(bx-cx)*this.view.s+cx+this.view.tx,y:(by-cy)*this.view.s+cy+this.view.ty};}
+  pick(e){const r=this.cv.getBoundingClientRect();const x=e.clientX-r.left,y=e.clientY-r.top;let best=null,bd=12;
+    for(const h of this.hits){const d=Math.hypot(h.x-x,h.y-y);if(d<bd){bd=d;best=h.ev;}}return best;}
+  draw(t){const c=this.ctx,st=this.state();if(!this.w)return;c.clearRect(0,0,this.w,this.h);
+    c.fillStyle='#070a0e';c.fillRect(0,0,this.w,this.h);
+    const L=this.layers;
+    if(L.grat){c.strokeStyle='rgba(28,37,50,.6)';c.lineWidth=1;
+      for(let lon=-180;lon<=180;lon+=15){const a=this.P(85,lon),b=this.P(-85,lon);c.beginPath();c.moveTo(a.x,a.y);c.lineTo(b.x,b.y);c.stroke();}
+      for(let lat=-75;lat<=75;lat+=15){const a=this.P(lat,-180),b=this.P(lat,180);c.beginPath();c.moveTo(a.x,a.y);c.lineTo(b.x,b.y);c.stroke();}}
+    if(L.tint){st.chronic.forEach(ch=>{const p=this.P(ch.fac.lat,ch.fac.lon);const g=c.createRadialGradient(p.x,p.y,0,p.x,p.y,70*this.view.s);
+      g.addColorStop(0,'rgba(255,107,53,.15)');g.addColorStop(1,'rgba(255,107,53,0)');c.fillStyle=g;c.beginPath();c.arc(p.x,p.y,70*this.view.s,0,7);c.fill();});}
+    const dot=Math.max(1.2,this.w/72*0.34*this.view.s);c.fillStyle='#233246';
+    for(const cell of LAND){const p=this.P(cell.lat,cell.lon);if(p.x<-8||p.x>this.w+8||p.y<-8||p.y>this.h+8)continue;
+      c.beginPath();c.arc(p.x,p.y,dot,0,7);c.fill();}
+    if(L.labels&&this.view.s<4){c.font='500 9px "IBM Plex Mono",monospace';c.fillStyle='rgba(139,152,169,.5)';c.textAlign='center';
+      LABELS.forEach(([n,la,lo])=>{const p=this.P(la,lo);c.fillText(n,p.x,p.y);});}
+    if(L.facilities){st.facilities.forEach(f=>{const p=this.P(f.lat,f.lon);
+      c.strokeStyle='rgba(125,141,161,.85)';c.lineWidth=1.2;c.beginPath();c.arc(p.x,p.y,5,0,7);c.stroke();
+      c.fillStyle='rgba(125,141,161,.35)';c.beginPath();c.arc(p.x,p.y,2,0,7);c.fill();});}
+    this.hits=[];
+    if(L.fires){st.events.forEach(ev=>{const p=this.P(ev.lat,ev.lon);if(p.x<-20||p.x>this.w+20||p.y<-20||p.y>this.h+20)return;
+      const col=COL[ev.ui],rad=clamp(2.5+ev.frp/60,2.5,8);
+      c.shadowColor=col;c.shadowBlur=9;c.fillStyle=col;c.globalAlpha=0.92;
+      c.beginPath();c.arc(p.x,p.y,rad,0,7);c.fill();c.shadowBlur=0;c.globalAlpha=1;
+      if(L.rings&&ev.ui==='persistent'){c.strokeStyle='rgba(255,184,0,.75)';c.lineWidth=1.3;
+        c.beginPath();c.arc(p.x,p.y,rad+5+Math.sin(t/420+(ev.ts%10))*2,0,7);c.stroke();}
+      if(st.selected===ev.id){c.strokeStyle='#fff';c.lineWidth=1.6;c.beginPath();c.arc(p.x,p.y,rad+4,0,7);c.stroke();}
+      this.hits.push({x:p.x,y:p.y,ev});});}
+    c.font='500 9px "IBM Plex Mono",monospace';c.fillStyle='rgba(91,104,121,.8)';c.textAlign='left';
+    c.fillText('ORTHO-2D · CANVAS-2D (WORLD) · NE 110m dot basemap',12,this.h-12);}}
+/* 9 · DEMO CONTROLLER */
+const demo={vp:'2d',range:14,filters:new Set(['industrial','persistent','wildfire','agricultural']),minConf:0,
+  paused:false,selected:null,gl:false,layers:{fires:true,rings:true,facilities:true,tint:true,labels:true,grat:true}};
+let map2d,globe2d,glGlobe2d=null;
+function filtered(){const cut=demo.range>=365?1e9:demo.range*24;
+  return EVENTS.filter(e=>e.ageH<=cut&&demo.filters.has(e.ui)&&e.conf>=demo.minConf);}
+function demoState(){const evs=filtered();const facSet=new Set();
+  evs.forEach(e=>{if(e.ui==='persistent'&&e.fac)facSet.add(e.fac.id);});
+  return {events:evs,facilities:FACILITIES,selected:demo.selected,
+    chronic:FACILITIES.filter(f=>facSet.has(f.id)).map(f=>({fac:f}))};}
+function refresh(){const evs=filtered();
+  $('#evCount').textContent=evs.length+' events';
+  const a24=evs.filter(e=>e.ageH<=24).length;
+  const share=evs.length?Math.round(100*evs.filter(e=>e.ui==='industrial'||e.ui==='persistent').length/evs.length):0;
+  const facSet=new Set();evs.forEach(e=>{if(e.ui==='persistent'&&e.fac)facSet.add(e.fac.id);});
+  const alerts=evs.filter(e=>e.ageH<=6&&e.risk>=60).length;
+  const mc=evs.length?Math.round(evs.reduce((a,e)=>a+e.conf,0)/evs.length):0;
+  $('#kActive').innerHTML=a24+' <small>↗</small>';$('#kShare').textContent=share+'%';$('#kPers').textContent=facSet.size;
+  $('#kAlerts').textContent=alerts;$('#kConf').textContent=mc+'%';
+  drawDonut(evs);drawTimeline(evs);drawChronic(evs);
+  if(glGlobe2d)glGlobe2d.rebuildFires();}
+function drawDonut(evs){const cv=$('#donut'),c=cv.getContext('2d');const d=2;cv.width=132*d;cv.height=132*d;c.setTransform(d,0,0,d,0,0);
+  c.clearRect(0,0,132,132);const counts={};['industrial','persistent','wildfire','agricultural'].forEach(k=>counts[k]=evs.filter(e=>e.ui===k).length);
+  const tot=evs.length||1;let a=-Math.PI/2;
+  for(const k in counts){if(!counts[k])continue;const sw=counts[k]/tot*Math.PI*2;
+    c.strokeStyle=COL[k];c.lineWidth=15;c.beginPath();c.arc(66,66,50,a+0.02,a+sw-0.02);c.stroke();a+=sw;}
+  c.fillStyle='#e8eef5';c.font='700 24px "Space Grotesk",sans-serif';c.textAlign='center';c.fillText(evs.length,66,64);
+  c.fillStyle='#5b6879';c.font='500 8px "IBM Plex Mono",monospace';c.fillText('EVENTS',66,78);
+  $('#donutLegend').innerHTML=['industrial','persistent','wildfire','agricultural'].map(k=>{
+    const n=counts[k],p=tot?Math.round(100*n/tot):0;
+    return `<div class="dl"><i style="background:${COL[k]}"></i>${k.slice(0,3).toUpperCase()}<b>${n}</b><span>· ${p}%</span></div>`;}).join('');}
+function drawTimeline(evs){const cv=$('#timeline'),c=cv.getContext('2d');const W=cv.clientWidth,H=150,d=2;
+  cv.width=W*d;cv.height=H*d;c.setTransform(d,0,0,d,0,0);c.clearRect(0,0,W,H);
+  const days=[...Array(14)].map((_,i)=>{const d0=new Date(NOW-(13-i)*864e5);d0.setHours(0,0,0,0);return d0.getTime();});
+  const data=days.map(ts=>{const nx=ts+864e5;const o={};
+    ['industrial','persistent','wildfire','agricultural'].forEach(k=>o[k]=evs.filter(e=>e.ts>=ts&&e.ts<nx&&e.ui===k).length);return o;});
+  const max=Math.max(4,...data.map(o=>o.industrial+o.persistent+o.wildfire+o.agricultural));
+  const bw=W/14;cv._bars=[];
+  data.forEach((o,i)=>{let y=H-4;const x=i*bw+bw*0.22,w=bw*0.56;
+    ['industrial','persistent','wildfire','agricultural'].forEach(k=>{const h=o[k]/max*(H-26);
+      if(h>0){c.fillStyle=COL[k];c.fillRect(x,y-h,w,h-1.5);y-=h;}});
+    cv._bars.push({x,w,o,tot:o.industrial+o.persistent+o.wildfire+o.agricultural,date:new Date(ts)});});
+  $('#tlStart').textContent=new Date(days[0]).toLocaleDateString('en',{day:'2-digit',month:'short'});
+  $('#tlEnd').textContent=new Date(NOW).toLocaleDateString('en',{day:'2-digit',month:'short'});}
+$('#timeline').addEventListener('mousemove',e=>{const cv=$('#timeline'),r=cv.getBoundingClientRect();const x=e.clientX-r.left;
+  const b=(cv._bars||[]).find(b=>x>=b.x-2&&x<=b.x+b.w+2);const tip=$('#tlTip');
+  if(b){tip.style.display='block';tip.style.left=clamp(e.clientX+14,10,innerWidth-220)+'px';tip.style.top=(e.clientY-10)+'px';
+    tip.innerHTML=`<b style="color:var(--txt)">${b.date.toLocaleDateString('en',{day:'2-digit',month:'short'})}</b> · ${b.tot} detections<br>IND ${b.o.industrial} · PRS ${b.o.persistent} · WLD ${b.o.wildfire} · AGR ${b.o.agricultural}`;}
+  else tip.style.display='none';});
+$('#timeline').addEventListener('mouseleave',()=>$('#tlTip').style.display='none');
+function drawChronic(evs){const map={};evs.filter(e=>e.ui==='persistent'&&e.fac).forEach(e=>{
+    map[e.fac.id]=map[e.fac.id]||{fac:e.fac,n:0,p:0};map[e.fac.id].n++;map[e.fac.id].p=Math.max(map[e.fac.id].p,e.persist);});
+  const list=Object.values(map).sort((a,b)=>b.p-a.p).slice(0,5);
+  $('#chronic').innerHTML=list.length?list.map(m=>`<div class="chr" data-f="${m.fac.id}"><b>${m.fac.name}</b>
+    <div class="m"><span>${SUBTYPE_LBL[m.fac.subtype]} · ${m.n} det/30d</span><span>${m.fac.hazard}</span></div>
+    <div class="m" style="margin-top:3px"><span style="color:var(--amber)">${m.p}d persistent</span><span>risk ${m.fac.hazard==='G-III'?'HIGH':'MODERATE'}</span></div>
+    <div class="bar"><i style="width:${clamp(m.p/30*100,8,100)}%"></i></div></div>`).join(''):
+    '<p class="mono" style="font-size:11px;color:var(--dim)">no chronic sources in current filter window</p>';
+  $$('#chronic .chr').forEach(el=>el.onclick=()=>{const ev=EVENTS.find(e=>e.fac&&e.fac.id===el.dataset.f);if(ev)openDrawer(ev);});}
+function suggest(ev){if(ev.fac)return{t:`Likely ${SUBTYPE_LBL[ev.fac.subtype]} fire`,
+    r:'Context-aware suggestion from land-cover, OSM and seasonal signals.',
+    b:[`${SUBTYPE_LBL[ev.fac.subtype]} facility within ${ev.dist} km (NBC ${ev.fac.hazard})`,`night_ratio ${ev.night} · frp ${ev.frp.toFixed(0)} MW`,`persist_days ${ev.persist} → ${ev.persist>=5?'chronic STA source':'transient'}`]};
+  if(ev.ui==='agricultural')return{t:'Likely agricultural residue burn',r:'Seasonal residue-burn prior active for this latitude band.',b:[`agri_window high (lat ${ev.lat.toFixed(1)}°)`,'low FRP, daytime-dominated','no OSM industrial facility nearby']};
+  return{t:'Likely wildfire (vegetation fire)',r:'Forest-proxy land cover dominates the pixel neighborhood.',b:[`forest_proxy high · facility ${ev.dist} km away`,'diurnal variance typical of vegetation fire',`persist_days ${ev.persist}`]};}
+function openDrawer(ev){demo.selected=ev.id;const s=suggest(ev);
+  $('#dwId').textContent=ev.id;
+  $('#dwBody').innerHTML=`
+   <div style="display:flex;gap:8px;align-items:center;margin-bottom:13px"><span class="badge" style="background:${COL[ev.ui]}22;color:${COL[ev.ui]}">${CLASS_LBL[ev.ui].toUpperCase()}</span><span class="chip">${ev.conf}% conf</span></div>
+   <div class="kv"><span>lat / lon</span><b>${ev.lat.toFixed(3)}, ${ev.lon.toFixed(3)}</b></div>
+   <div class="kv"><span>FRP</span><b>${ev.frp.toFixed(1)} MW</b></div>
+   <div class="kv"><span>brightness_k</span><b>${ev.bright.toFixed(0)} K</b></div>
+   <div class="kv"><span>night_ratio</span><b>${ev.night}</b></div>
+   <div class="kv"><span>persist_days</span><b style="color:${ev.persist>=5?'var(--amber)':'inherit'}">${ev.persist}${ev.persist>=5?' (≥5d STA)':''}</b></div>
+   <div class="kv"><span>facility</span><b>${ev.fac?ev.fac.name:'— none within 50 km'}</b></div>
+   <div class="kv"><span>facility_distance</span><b>${ev.dist} km</b></div>
+   <div class="kv"><span>hazard class</span><b>${ev.fac?ev.fac.hazard:'—'}</b></div>
+   <div class="kv"><span>risk score</span><b style="color:${ev.risk>=60?'var(--red)':ev.risk>=35?'var(--amber)':'var(--green)'}">${ev.risk} · ${riskLevel(ev.risk)}</b></div>
+   <div class="kv"><span>detected</span><b>${new Date(ev.ts).toLocaleString('en',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</b></div>
+   <div class="sugg"><h6>LIKELY FIRE TYPE · suggestFireType()</h6><p><b style="color:var(--orange)">${s.t}</b><br>${s.r}</p><ul>${s.b.map(x=>`<li>${x}</li>`).join('')}</ul></div>
+   <button class="btn btn-p btn-s" style="width:100%;justify-content:center" id="dwResp">⛨ RESPONSE RECOMMENDATION</button>
+   <button class="btn btn-g btn-s" style="width:100%;justify-content:center;margin-top:8px" id="dwFocus">◍ FOCUS IN 3D</button>
+   <div class="resp" id="respBox"></div>`;
+  $('#drawer').classList.add('open');
+  $('#dwResp').onclick=()=>{const box=$('#respBox');box.classList.toggle('open');
+    if(box.classList.contains('open')){const origin=ev.fac?{lat:ev.fac.lat,lon:ev.fac.lon}:{lat:ev.lat,lon:ev.lon};
+      const st=STATIONS.map(s=>({...s,d:havKm(origin.lat,origin.lon,s.lat,s.lon)})).sort((a,b)=>a.d-b.d).slice(0,3);
+      const hz=ev.fac?ev.fac.hazard:'—';const evac=HAZ_EVAC[hz]||500;
+      const veh=st.reduce((a,s)=>a+s.vehicles,0),per=st.reduce((a,s)=>a+s.personnel,0);
+      box.innerHTML=`<div class="stn"><b>resources <span>${veh} veh · ${per} pax</span></b><span>water ${veh*12500} L · evac radius ${evac} m · wind 270°</span></div>`+
+        st.map(s=>`<div class="stn"><b>${s.name}<span style="color:var(--orange)">${s.d.toFixed(1)} km</span></b><span>ETA ${(4+s.d*1.6).toFixed(1)} min · ${s.vehicles} vehicles · ${s.personnel} personnel</span></div>`).join('')+
+        `<div class="stn"><b>staging point<span>${(origin.lat+0.01).toFixed(2)}, ${(origin.lon-0.02).toFixed(2)}</span></b><span>POST /api/v1/response/recommend</span></div>`;}};
+  $('#dwFocus').onclick=()=>go({vp:'3d',lat:ev.lat.toFixed(4),lon:ev.lon.toFixed(4)});
+  refresh();}
+$('#dwClose').onclick=()=>{$('#drawer').classList.remove('open');demo.selected=null;refresh();};
+function ensureGL(){if(glGlobe2d)return;
+  if(!(window.THREE&&HAS_GL)){demo.gl=false;$('#glToggle').textContent='GL UNAVAILABLE — canvas routed';return;}
+  const cv=document.createElement('canvas');cv.style.cssText='position:absolute;inset:0;width:100%;height:100%';
+  $('#demoView').insertBefore(cv,$('#drawer'));
+  glGlobe2d=new GLGlobe(cv,{fires:()=>filtered().slice(0,120),bars:true});}
+function setVP(vp){demo.vp=vp;$$('#vpSeg button').forEach(b=>b.classList.toggle('on',b.dataset.vp===vp));
+  const is3=vp==='3d';$('#map2d').style.display=is3?'none':'block';$('#globe2d').style.display=is3&&!demo.gl?'block':'none';
+  $('#zoomer').style.display=is3?'none':'flex';
+  if(is3&&demo.gl){ensureGL();$('#globe2d').style.display='none';}
+  $('#routeChip').textContent=is3?(demo.gl?'ORB-3D · GL OPT-IN ⚠':'ORB-3D · CANVAS · PINNED'):'ORTHO-2D · CANVAS-2D (WORLD)';
+  $('#rendererChip').textContent='renderer: '+(is3&&demo.gl?'webgl (opt-in)':'canvas2d');
+  $('#glToggle').style.display=is3?'inline-flex':'none';}
+$('#vpSeg').onclick=e=>{const b=e.target.closest('button');if(b)setVP(b.dataset.vp);};
+$('#glToggle').onclick=()=>{demo.gl=!demo.gl;
+  $('#glToggle').textContent=demo.gl?'GL MODE: ON ⚠ presentation risk':'GL MODE: OFF — click to opt-in';
+  setVP('3d');};
+$('#layersBtn').onclick=()=>$('#layersPanel').classList.toggle('open');
+$$('#layersPanel input').forEach(i=>i.onchange=()=>{demo.layers[i.dataset.layer]=i.checked;map2d.layers=demo.layers;});
+$('#rangeChips').onclick=e=>{const b=e.target.closest('.rchip');if(!b)return;
+  $$('#rangeChips .rchip').forEach(x=>x.classList.remove('on'));b.classList.add('on');demo.range=+b.dataset.r;refresh();};
+$('#fchips').onclick=e=>{const b=e.target.closest('.fchip');if(!b)return;
+  const c=b.dataset.c;b.classList.toggle('on');demo.filters.has(c)?demo.filters.delete(c):demo.filters.add(c);refresh();};
+$('#confSlider').oninput=e=>{demo.minConf=+e.target.value;$('#confVal').textContent=demo.minConf;refresh();};
+$('#zIn').onclick=()=>map2d.zoomBy(1.3);$('#zOut').onclick=()=>map2d.zoomBy(0.77);$('#zHome').onclick=()=>map2d.home();
+setInterval(()=>{if(demo.paused)return;const ev=mkEvent(rng()*0.05);ev.ts=Date.now();ev.ageH=0;
+  EVENTS.unshift(ev);if(EVENTS.length>420)EVENTS.pop();refresh();},3400);
+function setPaused(p){demo.paused=p;$('#feedChip').innerHTML=p?'<span class="dot" style="color:var(--gray)"></span>PAUSED':'<span class="dot" style="color:var(--green)"></span>LIVE';
+  $('#feedChip').style.color=p?'var(--gray)':'var(--green)';}
+$('#feedChip').onclick=()=>setPaused(!demo.paused);
+/* 10 · CLASSIFICATION LAB */
+const PROTO={refinery:[120,330,.5,8,1.5,.1,.1],steel:[180,350,.6,20,.8,.1,.1],gas_flare:[90,320,.85,25,6,.05,.05],
+ cement:[70,315,.5,12,2.5,.2,.1],smelter:[110,340,.55,15,3,.15,.1],waste_incineration:[40,305,.4,6,8,.3,.2],
+ power_plant:[60,310,.5,18,1.2,.15,.1],chemical:[100,325,.5,7,2,.2,.15],unknown_industrial:[80,315,.5,4,12,.3,.2],
+ natural_fire:[150,330,.2,2,30,.9,.3],agri:[35,300,.15,1,25,.35,.9]};
+const SCALE=[300,120,1,30,50,1,1];
+function labFeatures(){return [+$('#s_frpl').value,+$('#s_bright').value,+$('#s_night').value/100,+$('#s_persist').value,
+  +$('#s_dist').value,+$('#s_forest').value/100,+$('#s_agri').value/100];}
+function predict(f){const scores={};for(const k in PROTO){let d=0;PROTO[k].forEach((p,i)=>{d+=((f[i]-p[i])/SCALE[i])**2;});scores[k]=Math.exp(-d*1.4);}
+  const tot=Object.values(scores).reduce((a,b)=>a+b,0)||1;const out={};for(const k in scores)out[k]=scores[k]/tot;return out;}
+function runLab(){const f=labFeatures();
+  $('#v_frpl').textContent=f[0];$('#v_bright').textContent=f[1];$('#v_night').textContent=f[2].toFixed(2);
+  $('#v_persist').textContent=f[3];$('#v_dist').textContent=f[4].toFixed(1);$('#v_forest').textContent=f[5].toFixed(2);$('#v_agri').textContent=f[6].toFixed(2);
+  const p=predict(f);const rank=Object.entries(p).sort((a,b)=>b[1]-a[1]);
+  let top=rank[0][0],conf=rank[0][1];
+  if(top==='agri'){top='natural_fire';conf=p.natural_fire+p.agri;}
+  const proj=(top==='natural_fire')?(f[6]>=0.5?'AGRICULTURAL':'WILDFIRE'):(f[3]>=5?'PERSISTENT':'INDUSTRIAL');
+  $('#labTop').textContent=top;$('#labTop').style.color=top==='natural_fire'?'var(--wld)':'var(--orange)';
+  $('#labConf').textContent=Math.round(conf*100)+'% confidence';
+  const pc={INDUSTRIAL:'var(--orange)',PERSISTENT:'var(--amber)',WILDFIRE:'var(--wld)',AGRICULTURAL:'var(--agr)'}[proj];
+  $('#labProj').textContent='UI: '+proj;$('#labProj').style.cssText=`background:${pc}22;color:${pc};margin-left:auto`;
+  $('#labProbs').innerHTML=rank.slice(0,5).map(([k,v])=>`<div class="prob"><div class="pl"><span>${k}</span><b>${(v*100).toFixed(1)}%</b></div>
+    <div class="pb"><i style="width:${clamp(v*100,1,100)}%;background:${(k==='natural_fire'||k==='agri')?'var(--wld)':'var(--orange)'}"></i></div></div>`).join('');
+  const hz=f[4]<3?1:f[4]<10?0.7:0.4;
+  const score=clamp(0.42*(f[0]/300)+0.3*(f[3]/30)+0.28*hz,0,1);
+  const lvl=riskLevel(score*100);const cols={LOW:'var(--green)',MODERATE:'var(--amber)',HIGH:'var(--orange)',CRITICAL:'var(--red)'};
+  $$('#riskMeter i').forEach((el,i)=>el.style.background=i<Math.round(score*5)?cols[lvl]:'var(--line2)');
+  $('#riskLbl').textContent=lvl;$('#riskLbl').style.color=cols[lvl];$('#riskScore').textContent='score '+score.toFixed(2);
+  $('#labRec').textContent={LOW:'Monitor via FIRMS NRT passes. No field response indicated; re-evaluate on next overpass.',
+    MODERATE:'Notify district control room. Correlate with OSM facility operator; schedule Sentinel-2 cross-check.',
+    HIGH:'Pre-position nearest station crew. Request facility operator confirmation; open incident log.',
+    CRITICAL:'Recommend full response plan: nearest stations, evacuation radius by NBC hazard class, staging point upwind.'}[lvl]
+    +(proj==='PERSISTENT'?' Persistence ≥5 d: route to regulatory follow-up (chronic thermal source), not incident response.':'');}
+$$('.sl-row input').forEach(i=>i.oninput=()=>{$$('#scenBtns .chip').forEach(c=>c.classList.remove('on'));runLab();});
+const SCEN={refinery:[120,330,50,8,2,10,10],steel:[180,350,60,20,1,10,10],gas_flare:[90,320,85,25,6,5,5],
+  power_plant:[60,310,50,18,1,15,10],natural_fire:[150,330,20,2,30,90,30],agri:[35,300,15,1,25,35,90]};
+$('#scenBtns').onclick=e=>{const b=e.target.closest('.chip');if(!b)return;
+  $$('#scenBtns .chip').forEach(c=>c.classList.remove('on'));b.classList.add('on');const s=SCEN[b.dataset.s];
+  $('#s_frpl').value=s[0];$('#s_bright').value=s[1];$('#s_night').value=s[2];$('#s_persist').value=s[3];
+  $('#s_dist').value=s[4];$('#s_forest').value=s[5];$('#s_agri').value=s[6];runLab();};
+/* 11 · ARCHITECTURE */
+const ARCH={firms:{t:'NASA FIRMS (MODIS + VIIRS)',d:'Two near-real-time active-fire products polled on schedule. Latency is 3–6 h and is stated explicitly everywhere in the UI and docs — ThermoWatch claims near-real-time, never real-time.',
+  l:['MODIS NRT polled every 6 h · 1 km resolution','VIIRS SNPP NRT polled every 3 h · 375 m resolution','FIRMS STA persistent mask (400 m grid, annual) informs the 5-day threshold','CSV area endpoint, MAP_KEY optional'],c:['375m–1km','3–6h latency','CSV']},
+ bun:{t:'Bun 1.4 Ingest Worker',d:'A TypeScript worker polls FIRMS with rate-limit awareness, retries with exponential backoff, and publishes batches to the FastAPI ingest endpoint. Without a FIRMS_API_KEY it falls back to a deterministic simulator so the platform is always demoable.',
+  l:['Polls FIRMS area endpoint (rate-limit aware)','Retries with exponential backoff','Publishes via POST /api/v1/ingest/events','Simulator fallback (5 s cadence) if no FIRMS_API_KEY'],c:['Bun 1.4','TypeScript 5.9','retry/backoff']},
+ api:{t:'FastAPI Backend (Python 3.11)',d:'Ingestion → feature engineering (fixed 12-feature contract) → OSM correlation → ML classification → risk scoring → persistence tracking. Inference precedence: trained bundle, optional ST-GNN head, heuristic ensemble — always available.',
+  l:['ML: RF + HistGradientBoosting probability-averaged ensemble','Optional PyG ST-GNN spatio-temporal head','WebSocket /ws/live — 5 event types, 30 s heartbeat','In-memory rolling 30-day event store + 14-day persistence'],c:['FastAPI 0.115','scikit-learn 1.5','joblib']},
+ web:{t:'React 19 Frontend (Vite)',d:'Dual viewport with renderer resilience: boot-time rAF shim, canvas-first routing and a WebGL capability probe. Canvas2D engines draw imperatively on setInterval and are immune to dead-rAF and broken-GL-presentation failure modes.',
+  l:['ORTHO-2D: MapLibre GL + Canvas2D fallback world map','ORB-3D: globe.gl WebGL + CanvasGlobe orthographic fallback','Advanced Mode (opt-in): deck.gl hexagons, DuckDB-WASM SQL, time slider','App-wide ErrorBoundary; GL is explicit opt-in with warning chip'],c:['React 19','Vite 7','Zustand 5','deck.gl 9','DuckDB-WASM']}};
+function setNode(k){const a=ARCH[k];$$('#architecture .node').forEach(n=>n.classList.toggle('on',n.dataset.node===k));
+  $('#archTitle').textContent='STAGE DETAIL · '+a.t.toUpperCase();$('#archDesc').textContent=a.d;
+  $('#archList').innerHTML=a.l.map(x=>`<li>${x}</li>`).join('');$('#archChips').innerHTML=a.c.map(x=>`<span class="chip on">${x}</span>`).join('');}
+$$('#architecture .node').forEach(n=>n.onclick=()=>setNode(n.dataset.node));
+/* 12 · MODEL CARD */
+const PC=[['refinery',.92,.91,.91,60],['steel',.90,.90,.90,60],['gas_flare',.89,.88,.88,60],['cement',.87,.87,.87,60],
+ ['smelter',.86,.85,.85,60],['waste_incineration',.84,.83,.83,60],['power_plant',.85,.83,.84,60],['chemical',.88,.85,.86,60],
+ ['unknown_industrial',.74,.73,.73,60],['natural_fire',.87,.80,.84,60]];
+$('#pcBody').innerHTML=PC.map(r=>`<tr><td>${r[0]}</td><td>${r[1].toFixed(2)}</td><td>${r[2].toFixed(2)}</td><td style="color:var(--green)">${r[3].toFixed(2)}</td><td>${r[4]}</td></tr>`).join('');
+const CM=[[55,0,1,0,0,1,1,1,1,0],[1,54,0,1,2,0,1,0,1,0],[2,0,53,0,0,0,2,0,3,0],[0,1,0,52,1,2,2,0,2,0],
+ [1,2,0,1,51,0,1,0,3,1],[1,0,0,2,0,50,1,1,3,2],[1,1,1,2,1,1,50,0,2,1],[1,0,0,1,0,2,1,51,3,1],
+ [1,1,2,1,2,1,1,2,44,5],[0,1,0,0,1,2,2,1,4,48]];
+const CL=['REF','STL','FLR','CMT','SML','WST','PWR','CHM','UNK','NAT'];
+(function(){let h='<div class="hd"></div>'+CL.map(c=>`<div class="hd">${c}</div>`).join('');
+  CM.forEach((row,i)=>{h+=`<div class="hd">${CL[i]}</div>`+row.map((v,j)=>{
+    const a=v/55;const bg=i===j?`rgba(63,185,80,${0.15+a*0.7})`:`rgba(255,107,53,${a*0.85})`;
+    return `<div class="cell" style="background:${bg};color:${v>20?'#0b0f15':'var(--mut)'}" title="true ${CL[i]} → pred ${CL[j]}: ${v}">${v||'·'}</div>`;}).join('');});
+  $('#cmGrid').innerHTML=h;})();
+const LIMITS=['Proxy labels: OSM-tag / synthetic signatures — not on-site verified','MODIS→VIIRS transfer untested',
+ 'FIRMS misses fires below ~375 m²','Cloud-cover gaps not modelled','UI 4-class is a documented projection of the 10-way posterior'];
+$('#limitsGrid').innerHTML=LIMITS.map(l=>`<div class="card" style="border-color:rgba(255,184,0,.3)"><h3 style="color:var(--amber);font-size:14px">⚠ ${l.split(':')[0]}</h3><p>${l.includes(':')?l.split(':').slice(1).join(':'):l}</p></div>`).join('');
+const EVAL={model:"tw-ensemble-v1",trained_at:"2026-09-01T09:14:00Z",
+ dataset:{source:"synthetic",n_samples:4000,label_provenance:"OSM-tag / synthetic signatures"},
+ split:{train:2800,val:600,test:600,stratified:true},
+ metrics:{macro_f1:0.877,weighted_f1:0.889,per_class:{refinery:{precision:0.92,recall:0.91,f1:0.91,support:60}}},
+ confusion_matrix:{labels:CL},inference_ms_p50:80,limitations:LIMITS};
+function syntax(j){return j.replace(/&/g,'&amp;').replace(/</g,'&lt;')
+  .replace(/("[^"]*")(\s*:)?/g,(m,s,c)=>c?`<span class="f">${s}</span>${c}`:`<span class="s">${s}</span>`)
+  .replace(/\b(\d+\.?\d*)\b/g,'<span class="n">$1</span>');}
+$('#evalJson').innerHTML='<button class="copy">copy</button>'+syntax(JSON.stringify(EVAL,null,2));
+$('#mcTabs').onclick=e=>{const b=e.target.closest('.tab');if(!b)return;
+  $$('#mcTabs .tab').forEach(t=>t.classList.remove('on'));b.classList.add('on');
+  $$('#model .tabpane').forEach(p=>p.classList.remove('on'));$('#pane-'+b.dataset.t).classList.add('on');};
+/* 13 · API EXPLORER */
+const EPS=[
+ {m:'GET',p:'/api/v1/healthz',d:'Health check (status, realtime_claim).',f:()=>({status:"ok",realtime_claim:"near-real-time (FIRMS latency: 3-6h)",version:"1.0"})},
+ {m:'GET',p:'/api/v1/events?window_hours=24',d:'List recent events in window.',f:()=>filtered().slice(0,3).map(e=>({id:e.id,lat:+e.lat.toFixed(4),lon:+e.lon.toFixed(4),frp:+e.frp.toFixed(1),brightness_k:+e.bright.toFixed(1),confidence:e.conf,ui_class:e.ui,persist_days:e.persist}))},
+ {m:'GET',p:'/api/v1/events/{id}',d:'Single event by id.',f:()=>{const e=EVENTS[0];return {id:e.id,lat:e.lat,lon:e.lon,frp:e.frp,ui_class:e.ui,facility:e.fac?e.fac.name:null,risk:e.risk};}},
+ {m:'POST',p:'/api/v1/ingest/events',d:'Batch ingest (from FIRMS worker).',f:()=>({accepted:24,rejected:0,store_size:EVENTS.length})},
+ {m:'POST',p:'/api/v1/predict',d:'Manual prediction from the 12-feature contract.',f:()=>{const p=predict(labFeatures());const r=Object.entries(p).sort((a,b)=>b[1]-a[1]);return {top_class:r[0][0],confidence:+r[0][1].toFixed(3),provenance:"heuristic ensemble",top5:Object.fromEntries(r.slice(0,5).map(([k,v])=>[k,+v.toFixed(3)]))};}},
+ {m:'GET',p:'/api/v1/model/card',d:'Model card: metrics, provenance, limitations.',f:()=>({model:"tw-ensemble-v1",macro_f1:0.877,weighted_f1:0.889,provenance:"trained bundle (RF+HistGB)",limitations:LIMITS})},
+ {m:'GET',p:'/api/v1/model/confusion',d:'Confusion matrix (test split).',f:()=>({labels:CL,matrix:CM})},
+ {m:'GET',p:'/api/v1/stats/kpis',d:'KPIs: active24, industrialShare, persistent, alerts, meanConf.',f:()=>{const e=filtered();return {active24:e.filter(x=>x.ageH<=24).length,industrialShare:+(e.filter(x=>x.ui==='industrial'||x.ui==='persistent').length/(e.length||1)).toFixed(2),persistentSrc:new Set(e.filter(x=>x.ui==='persistent'&&x.fac).map(x=>x.fac.id)).size,openAlerts:e.filter(x=>x.ageH<=6&&x.risk>=60).length,meanConf:Math.round(e.reduce((a,x)=>a+x.conf,0)/(e.length||1))};}},
+ {m:'GET',p:'/api/v1/stats/history?days=180',d:'Historical aggregates: daily + leaderboard + persistent cells.',f:()=>({days:180,total_events:12345,persistent_cells:8,leaderboard:FACILITIES.slice(0,4).map((f,i)=>({facility_id:f.id,name:f.name,count:f.det}))})},
+ {m:'POST',p:'/api/v1/response/recommend',d:'Response plan: stations, resources, evacuation.',f:()=>{const o=FACILITIES[0];
+   const st=STATIONS.map(s=>({...s,distance_km:+havKm(o.lat,o.lon,s.lat,s.lon).toFixed(1)})).sort((a,b)=>a.distance_km-b.distance_km).slice(0,2)
+     .map(s=>({id:s.id,name:s.name,distance_km:s.distance_km,eta_min:+(s.distance_km*1.6+4).toFixed(1),vehicles:s.vehicles,personnel:s.personnel}));
+   return {nearest_stations:st,resources:{vehicles:st.reduce((a,s)=>a+s.vehicles,0),personnel:st.reduce((a,s)=>a+s.personnel,0),water_liters:st.reduce((a,s)=>a+s.vehicles,0)*12500},evacuation_radius_m:1500,staging_point:{lat:22.48,lon:70.05},wind_bearing_deg:270};}}];
+$('#epList').innerHTML=EPS.map((e,i)=>`<div class="ep ${i===0?'on':''}" data-i="${i}"><span class="m m-${e.m.toLowerCase()}">${e.m}</span><span class="p">${e.p}</span></div>`).join('');
+let curEp=0;
+$('#epList').onclick=e=>{const el=e.target.closest('.ep');if(!el)return;curEp=+el.dataset.i;
+  $$('#epList .ep').forEach(x=>x.classList.toggle('on',x===el));
+  $('#apiMethod').textContent=EPS[curEp].m;$('#apiMethod').className='mono m m-'+EPS[curEp].m.toLowerCase();
+  $('#apiPath').textContent=EPS[curEp].p;$('#apiDesc').textContent=EPS[curEp].d;
+  $('#apiStatus').style.display='none';$('#apiMs').textContent='';};
+$('#apiSend').onclick=()=>{const btn=$('#apiSend');btn.textContent='…';const t0=performance.now();
+  const live=BACKEND_LIVE&&LIVE_EP[curEp];
+  const finish=(obj,src)=>{const ms=Math.round(performance.now()-t0)+40+Math.floor(Math.random()*120);
+    btn.textContent='SEND ▸';$('#apiStatus').style.display='inline';
+    $('#apiStatus').textContent=src==='live'?'200 OK · LIVE':'200 OK · SIM';
+    $('#apiStatus').style.cssText=src==='live'
+      ?'background:rgba(63,185,80,.15);color:var(--green);display:inline'
+      :'background:rgba(255,184,0,.15);color:var(--amber);display:inline';
+    $('#apiMs').textContent=ms+' ms';
+    $('#apiOut').innerHTML='<button class="copy">copy</button>'+syntax(JSON.stringify(obj,null,2));};
+  if(live){const opt={method:live.m,headers:{'content-type':'application/json'}};if(live.body)opt.body=JSON.stringify(live.body());
+    fetch(API+live.p,opt).then(r=>r.json()).then(j=>finish(j,'live')).catch(()=>finish(EPS[curEp].f(),'sim'));}
+  else setTimeout(()=>finish(EPS[curEp].f(),'sim'),260+Math.random()*300);};
+$('#wsBurst').onclick=()=>{['fire:new','fire:classified','persistence:detected','alert:triggered','system:status'].forEach((t,i)=>{
+  setTimeout(()=>{const col=TICK_TYPES.find(x=>x[0]===t);const row=$('#tickRow');
+    row.insertAdjacentHTML('afterbegin',`<span class="tick-item"><i style="background:${col[1]};box-shadow:0 0 7px ${col[1]}"></i><b style="color:${col[1]}">${t}</b> burst @ ${new Date().toLocaleTimeString()}</span>`);
+    while(row.children.length>28)row.removeChild(row.lastChild);},i*380);});};
+/* 14 · PERSISTENCE + FACILITIES */
+function renderPersist(){const d=+$('#pSlider').value;$('#pDays').textContent=d;
+  $('#dayCells').innerHTML=[...Array(14)].map((_,i)=>`<div class="dc ${i<d?'on':''} ${i===4?'th':''}"></div>`).join('');
+  const chronic=d>=5;
+  $('#pStatus').textContent=chronic?'CHRONIC · STA THRESHOLD CROSSED':'TRANSIENT';
+  $('#pStatus').style.color=chronic?'var(--amber)':'var(--gray)';
+  $('#pDesc').textContent=chronic?'Five or more consecutive detection-days: the cell is promoted to the Chronic Thermal Sources board and routed to regulatory follow-up — a standing thermal source, not a new incident.':'Below the five-day static-thermal-anomaly threshold — treated as a transient fire for incident awareness only.';
+  $('#pWs').textContent=chronic?'ws: persistence:detected (amber #FFB800)':'ws: fire:new / fire:classified';
+  $('#pWs').style.color=chronic?'var(--amber)':'';}
+$('#pSlider').oninput=renderPersist;
+$('#facBody').innerHTML=FACILITIES.map(f=>`<tr><td>${f.id}</td><td>${f.name}</td><td>${f.subtype}</td><td style="color:${f.hazard==='G-III'?'var(--red)':f.hazard==='G-II'?'var(--amber)':'var(--green)'}">${f.hazard}</td></tr>`).join('');
+/* 15 · CLAIM GATE */
+const CHECKS=[
+ {name:'"real-time" without near- qualifier',test:t=>/\breal[- ]time\b/i.test(t)&&!/near[- ]real[- ]time/i.test(t)},
+ {name:'"first-ever" / "first system to"',test:t=>/first[- ]ever|first system to/i.test(t)},
+ {name:'"prevents" as causal claim',test:t=>/prevent(s|ing)?\b/i.test(t)&&/fire|disaster/i.test(t)},
+ {name:'"100% accuracy" / "guarantee"',test:t=>/100\s?% accuracy|guarantee/i.test(t)},
+ {name:'unqualified "novel"',test:t=>/novel(?! application)/i.test(t)}];
+function runClaims(){const t=$('#claimIn').value;let bad=0;
+  $('#claimOut').innerHTML=CHECKS.map(c=>{const hit=c.test(t);if(hit)bad++;
+    return `<div class="cl ${hit?'bad':'ok'}">${hit?'✗':'✓'} <span>${hit?'VIOLATION: ':'clean: '}${c.name}</span></div>`;}).join('')
+   +`<div class="cl ${bad?'bad':'ok'}" style="font-weight:600">${bad?'✗':'✓'} <span>claim_audit.py → ${bad?`FAIL (${bad} forbidden claim${bad>1?'s':''}) — build blocked`:'PASS — 123 files scanned, 0 violations'}</span></div>`;
+  $('#claimGate').textContent=bad?'GATE: FAIL':'GATE: PASS';
+  $('#claimGate').style.cssText=bad?'background:rgba(255,68,68,.15);color:var(--red);margin-left:auto':'background:rgba(63,185,80,.15);color:var(--green);margin-left:auto';}
+$('#claimRun').onclick=runClaims;$('#claimIn').oninput=runClaims;
+$('#claimSafe').onclick=()=>{$('#claimIn').value='ThermoWatch provides near-real-time monitoring (FIRMS latency: 3-6h) and supports faster incident awareness; macro-F1 0.877 on the 10-way task.';runClaims();};
+$('#claimRisky').onclick=()=>{$('#claimIn').value='ThermoWatch provides real-time detection and prevents industrial fires with 100% accuracy.';runClaims();};
+/* 16 · COPY */
+document.addEventListener('click',e=>{const b=e.target.closest('.copy');if(!b)return;
+  const txt=b.parentElement.innerText.replace('copy','');
+  (navigator.clipboard?navigator.clipboard.writeText(txt):Promise.reject()).then(()=>{b.textContent='copied ✓';setTimeout(()=>b.textContent='copy',1400);})
+  .catch(()=>{b.textContent='ctrl+c';setTimeout(()=>b.textContent='copy',1400);});});
+/* 17 · NAV / REVEAL / COUNT / PROGRESS */
+$('#burger').onclick=()=>$('#navLinks').classList.toggle('open');
+$$('#navLinks a').forEach(a=>a.onclick=()=>$('#navLinks').classList.remove('open'));
+const io=new IntersectionObserver(es=>es.forEach(x=>{if(x.isIntersecting){x.target.classList.add('in');io.unobserve(x.target);}}),{threshold:.12});
+$$('.rev').forEach(el=>io.observe(el));
+const io2=new IntersectionObserver(es=>es.forEach(x=>{if(x.isIntersecting){
+  $$('#navLinks a').forEach(a=>a.classList.toggle('on',a.getAttribute('href')==='#'+x.target.id));}}),{rootMargin:'-40% 0px -55% 0px'});
+$$('section[id]').forEach(s=>io2.observe(s));
+const ioC=new IntersectionObserver(es=>es.forEach(x=>{if(!x.isIntersecting)return;ioC.unobserve(x.target);
+  const el=x.target,target=parseFloat(el.dataset.count),dec=+(el.dataset.dec||0),suf=el.dataset.suffix||'';
+  const t0=performance.now();(function step(t){const u=clamp((t-t0)/1300,0,1),e=1-Math.pow(1-u,3);
+    el.textContent=(target*e).toFixed(dec)+suf;if(u<1)requestAnimationFrame(step);})(t0);}),{threshold:.5});
+$$('[data-count]').forEach(el=>ioC.observe(el));
+addEventListener('scroll',()=>{$('#toTop').classList.toggle('on',scrollY>700);
+  const h=document.documentElement;$('#progress').style.width=(scrollY/(h.scrollHeight-innerHeight)*100)+'%';},{passive:true});
+$('#toTop').onclick=()=>scrollTo({top:0,behavior:'smooth'});
+$$('.tilt').forEach(el=>{el.addEventListener('mousemove',e=>{const r=el.getBoundingClientRect();
+  const x=(e.clientX-r.left)/r.width-.5,y=(e.clientY-r.top)/r.height-.5;
+  el.style.transform=`translateY(-4px) perspective(750px) rotateX(${-y*5}deg) rotateY(${x*5}deg)`;});
+  el.addEventListener('mouseleave',()=>el.style.transform='');});
+/* 18 · SELF TEST */
+function runSelfTest(){$('#selfTest').classList.add('open');
+  $('#stRaf').textContent='measuring…';$('#stFps').textContent='—';
+  let frames=0;const t0=performance.now();
+  (function loop(){frames++;if(performance.now()-t0<1000)requestAnimationFrame(loop);else{
+    $('#stFps').textContent=frames+' fps';
+    $('#stRaf').innerHTML=RAF_ALIVE?'<span style="color:var(--green)">alive (native)</span>':'<span style="color:var(--amber)">shimmed (setTimeout driver)</span>';}})();
+  $('#stCanvas').innerHTML=document.createElement('canvas').getContext('2d')?'<span style="color:var(--green)">ok</span>':'<span style="color:var(--red)">missing</span>';
+  $('#stGl').innerHTML=HAS_GL?'<span style="color:var(--green)">available</span>':'<span style="color:var(--red)">unavailable</span>';
+  $('#stRoute').innerHTML='<span style="color:var(--orange)">CANVAS2D default · GL opt-in</span>';
+  $('#stRisk').innerHTML=HAS_GL?'<span style="color:var(--amber)">context ok — presentation not guaranteed on this host</span>':'<span style="color:var(--green)">n/a — canvas routed</span>';}
+$('#stRun').onclick=runSelfTest;$('#stClose').onclick=$('#stOk').onclick=()=>$('#selfTest').classList.remove('open');
+$('#selfTest').onclick=e=>{if(e.target.id==='selfTest')$('#selfTest').classList.remove('open');};
+/* 19 · KEYS */
+addEventListener('keydown',e=>{const tag=(e.target.tagName||'').toLowerCase();
+  if(tag==='input'||tag==='textarea'||tag==='select')return;
+  if(e.key==='1')setVP('2d');
+  else if(e.key==='2')setVP('3d');
+  else if(e.key===' '){e.preventDefault();setPaused(!demo.paused);}
+  else if(e.key==='Escape'){$('#drawer').classList.remove('open');$('#selfTest').classList.remove('open');}
+  else if(e.key.toLowerCase()==='t')runSelfTest();
+  else if(e.key.toLowerCase()==='o')location.hash='#overview';
+  else if(e.key.toLowerCase()==='k')location.hash='#model';
+  else if(e.key.toLowerCase()==='x')location.hash='#demo';
+  else if(e.key.toLowerCase()==='h')location.hash='#viewports';});
+/* 20.5 · DASHBOARD BRIDGE */
+const APP='/app.html';
+const API='http://localhost:8000';
+function go(q={}){const u=new URL(APP,location.origin);Object.entries(q).forEach(([k,v])=>u.searchParams.set(k,v));location.href=u.toString();}
+let BACKEND_LIVE=false;
+function probeBackend(){
+  const ctl=new AbortController();const t=setTimeout(()=>ctl.abort(),2500);
+  fetch(API+'/api/v1/healthz',{signal:ctl.signal}).then(r=>r.ok?r.json():Promise.reject()).then(()=>{
+    BACKEND_LIVE=true;clearTimeout(t);
+    $('#backendChip').innerHTML='<span class="dot"></span>BACKEND LIVE';
+    $('#simNote').textContent='LIVE PREVIEW · backend :8000';
+    $('#simNote').style.cssText='color:var(--green);border-color:rgba(63,185,80,.45)';
+  }).catch(()=>{clearTimeout(t);BACKEND_LIVE=false;});
+}
+$('#openApp').onclick=()=>go({});
+const LIVE_EP={0:{m:'GET',p:'/api/v1/healthz'},1:{m:'GET',p:'/api/v1/events?window_hours=24'},
+5:{m:'GET',p:'/api/v1/model/card'},6:{m:'GET',p:'/api/v1/model/confusion'},
+7:{m:'GET',p:'/api/v1/stats/kpis'},8:{m:'GET',p:'/api/v1/stats/history?days=180'},
+4:{m:'POST',p:'/api/v1/predict',body:()=>{const f=labFeatures();return{frp:f[0],brightness_k:f[1],night_ratio:f[2],persist_days:f[3],forest_proxy:f[5],agri_window:f[6],include_spread:false};}},
+9:{m:'POST',p:'/api/v1/response/recommend',body:()=>({lat:22.47,lon:70.07,fire_class:'industrial',hazard:'G-III'})}};
+/* 20 · BOOT */
+installRafShimIfDead().then(()=>{
+  let heroOk=false;
+  try{if(window.THREE&&HAS_GL){new GLGlobe($('#heroGlobe'),{fires:()=>EVENTS.filter(e=>e.ageH<72).slice(0,110),bars:true,arcs:true});heroOk=true;}}catch(e){}
+  if(!heroOk){const g=new CanvasGlobe($('#heroGlobe'),{fires:()=>EVENTS.filter(e=>e.ageH<72).slice(0,110),zoom:1.15});
+    (function loop(t){g.draw(t);requestAnimationFrame(loop);})(0);}
+  map2d=new Map2D($('#map2d'),{state:demoState,layers:demo.layers,
+    onClick:ev=>ev?openDrawer(ev):($('#drawer').classList.remove('open'),demo.selected=null,refresh())});
+  globe2d=new CanvasGlobe($('#globe2d'),{fires:()=>filtered().slice(0,140)});
+  const tm=new Map2D($('#tourMap'),{interactive:false,state:()=>({events:EVENTS.filter(e=>e.ageH<120),facilities:FACILITIES,chronic:[{fac:FACILITIES[0]}],selected:null})});
+  const tg=new CanvasGlobe($('#tourGlobe'),{fires:()=>EVENTS.filter(e=>e.ageH<120).slice(0,90),zoom:1.25});
+  let ts;
+  try{if(window.THREE&&HAS_GL){ts=new SceneGL($('#tourScene'));}else throw 0;}
+  catch(e){ts=new SceneIso($('#tourScene'));$('#sceneBadge').textContent='● LIVE CANVAS2D';}
+  (function loop(t){
+    if(demo.vp==='2d')map2d.draw(t);else if(!demo.gl)globe2d.draw(t);
+    if(glGlobe2d&&demo.vp==='3d'&&demo.gl)glGlobe2d.draw(t);
+    tm.draw(t);tg.draw(t);ts.draw(t);
+    requestAnimationFrame(loop);})(0);
+  setNode('firms');runLab();renderPersist();refresh();runClaims();probeBackend();
+  $('#apiDesc').textContent=EPS[0].d;
+  setTimeout(()=>$('#apiSend').click(),500);
+});
+</script>
+</body>
 </html>

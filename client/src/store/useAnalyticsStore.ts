@@ -13,6 +13,8 @@ export interface LayerVisibility {
   labels: boolean;
   choropleth: boolean;
   nightTexture: boolean;
+  imagery: boolean;
+  starfield: boolean;
 }
 
 interface AnalyticsState {
@@ -21,11 +23,15 @@ interface AnalyticsState {
   windowKey: string;
   layers: LayerVisibility;
   duckdbReady: boolean;
+    rendererOverride: 'auto' | 'maplibre' | 'canvas';
+  globeOverride: 'auto' | 'gl' | 'canvas';
+  setGlobeOverride: (g: 'auto' | 'gl' | 'canvas') => void;
   setAdvancedMode: (m: boolean) => void;
   setTimeRange: (r: Partial<TimeRange>) => void;
   setWindow: (key: string, hours: number | null) => void;
   setLayers: (l: Partial<LayerVisibility>) => void;
   setDuckDBReady: (r: boolean) => void;
+  setRendererOverride: (r: 'auto' | 'maplibre' | 'canvas') => void;
   play: () => void;
   pause: () => void;
   resetTimeRange: () => void;
@@ -48,15 +54,19 @@ export const useAnalyticsStore = create<AnalyticsState>()((set) => ({
   layers: {
     hexagonDensity: true, buildingExtrusion: true, spreadRings: true, timeSlider: true,
     persistentRings: true, facilities: true, graticule: true, labels: true,
-    choropleth: true, nightTexture: false,
+    choropleth: true, nightTexture: false, imagery: false, starfield: true,
   },
   duckdbReady: false,
+  rendererOverride: 'auto',
   setAdvancedMode: (advancedMode) => set({ advancedMode }),
   setTimeRange: (r) => set((s) => ({ timeRange: { ...s.timeRange, ...r } })),
   setWindow: (key, hours) =>
     set({ windowKey: key, timeRange: { start: hours === null ? Date.now() - 365 * DAY : Date.now() - hours * 3_600_000, end: Date.now(), playing: false, speed: 1 } }),
   setLayers: (l) => set((s) => ({ layers: { ...s.layers, ...l } })),
   setDuckDBReady: (duckdbReady) => set({ duckdbReady }),
+    setRendererOverride: (rendererOverride) => set({ rendererOverride }),
+  globeOverride: 'auto',
+  setGlobeOverride: (globeOverride) => set({ globeOverride }),
   play: () => set((s) => ({ timeRange: { ...s.timeRange, playing: true } })),
   pause: () => set((s) => ({ timeRange: { ...s.timeRange, playing: false } })),
   resetTimeRange: () =>

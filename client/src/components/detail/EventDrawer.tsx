@@ -7,6 +7,9 @@ import { haversineKm } from '@/lib/geo/distance';
 import { hashString, mulberry32 } from '@/lib/random/mulberry';
 import { coordLabel, fmtKm, fmtMW, relTime, utcStamp } from '@/lib/utils/format';
 import { useFireStore } from '@/store/useFireStore';
+import { useUIStore } from '@/store/useUIStore';
+import { suggestFireType } from '@/features/context/suggestFireType';
+import { ResponsePlan } from '@/features/response/ResponsePlan';
 
 /** Slide-over incident dossier for the selected detection. */
 export function EventDrawer() {
@@ -15,6 +18,7 @@ export function EventDrawer() {
   const facilities = useFireStore((s) => s.facilities);
   const select = useFireStore((s) => s.select);
   const raiseAlert = useFireStore((s) => s.raiseAlert);
+  const setSceneEventId = useUIStore((s) => s.setSceneEventId);
   const e = events.find((x) => x.id === selectedId);
 
   const nearest = useMemo(() => {
@@ -96,6 +100,11 @@ export function EventDrawer() {
       )}
 
       <section className="rounded-md border border-edge bg-panel2/60 p-2.5">
+        <div className="mono mb-1.5 text-[9px] uppercase tracking-widest text-dim">response recommendation · model, not orders</div>
+        <ResponsePlan event={e} />
+      </section>
+
+      <section className="rounded-md border border-edge bg-panel2/60 p-2.5">
         <div className="mono mb-1.5 text-[9px] uppercase tracking-widest text-dim">multi-source validation</div>
         <div className="flex gap-3">
           <a className="mono text-[10px] text-ember underline-offset-2 hover:underline" target="_blank" rel="noreferrer"
@@ -108,9 +117,32 @@ export function EventDrawer() {
         <div className="mono mt-1 text-[9px] text-dim">labels are OSM-tag proxies — cross-check imagery before field action</div>
       </section>
 
-      <button onClick={() => raiseAlert(e.id)} className="mono rounded-md border border-ember/50 bg-ember/10 px-3 py-2 text-[11px] font-semibold uppercase tracking-widest text-ember transition-colors hover:bg-ember/20">
-        raise verification alert
-      </button>
+      <section className="rounded-md border border-edge bg-panel2/60 p-2.5">
+        <div className="mono mb-1.5 text-[9px] uppercase tracking-widest text-dim">context hypotheses (ranked, evidence-backed)</div>
+        <ul className="space-y-2">
+          {suggestFireType(e, facilities).map((h, i) => (
+            <li key={h.label}>
+              <div className="flex items-center justify-between gap-2">
+                <span className={`text-[11px] font-medium ${i === 0 ? 'text-ink' : 'text-mute'}`}>{i + 1}. {h.label}</span>
+                <span className="mono text-[9px] text-dim">w={h.weight.toFixed(2)}</span>
+              </div>
+              <ul className="mt-0.5 space-y-0.5 pl-3 text-[9px] text-dim">
+                {h.evidence.map((evd) => <li key={evd}>· {evd}</li>)}
+              </ul>
+            </li>
+          ))}
+        </ul>
+        <div className="mono mt-1.5 text-[8px] text-dim">hypotheses ≠ certainty — validate with Sentinel-2 / field report before action</div>
+      </section>
+
+      <div className="flex gap-2">
+        <button onClick={() => setSceneEventId(e.id)} className="mono flex-1 rounded-md border border-edge px-3 py-2 text-[11px] font-semibold uppercase tracking-widest text-mute transition-colors hover:border-ember/50 hover:text-ember">
+          view 3D scene
+        </button>
+        <button onClick={() => raiseAlert(e.id)} className="mono flex-1 rounded-md border border-ember/50 bg-ember/10 px-3 py-2 text-[11px] font-semibold uppercase tracking-widest text-ember transition-colors hover:bg-ember/20">
+          raise verification alert
+        </button>
+      </div>
     </div>
   );
 }

@@ -1,0 +1,11 @@
+{
+  "name": "@thermowatch/ingest",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "bun run src/main.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": { "typescript": "^5.9.2", "@types/bun": "^1.2.0" }
+}

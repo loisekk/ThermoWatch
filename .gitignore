@@ -7,3 +7,11 @@ __pycache__/
 *.pyc
 server/api/app/ml/models/
 .DS_Store
+
+# security & artifacts
+*.joblib
+*.pem
+*.key
+.env.*
+.vscode/
+*.log

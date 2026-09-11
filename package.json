@@ -1,0 +1,20 @@
+{
+  "name": "thermowatch-monorepo",
+  "private": true,
+  "version": "0.3.0",
+  "description": "ThermoWatch — SIH26162 (NTRO). client/: React console · server/api: FastAPI brain · server/ingest: Bun FIRMS worker. Each package manages its own deps (npm for client, bun for ingest).",
+  "scripts": {
+    "dev:client": "npm --prefix client run dev",
+    "dev:api": "cd server/api && .venv\\Scripts\\python.exe -m uvicorn app.main:app --reload --port 8000",
+    "dev:ingest": "cd server/ingest && bun run dev",
+    "install:all": "npm --prefix client install && cd server/api && .venv\\Scripts\\python.exe -m pip install -r requirements.txt && cd ../ingest && bun install",
+    "train": "cd server/api && .venv\\Scripts\\python.exe -m app.ml.train --source synthetic --samples 4000",
+    "test:api": "cd server/api && .venv\\Scripts\\python.exe -m pytest -q",
+    "test:client": "cd client && npm run test",
+    "test:claims": "python scripts/claim_audit.py",
+    "test": "npm run test:api && npm run test:client && npm run test:claims",
+    "typecheck": "npm --prefix client run typecheck && cd server/ingest && bun run typecheck"
+  }
+}
+
+

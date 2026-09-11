@@ -2,6 +2,14 @@
 
 export type FireClass = 'industrial' | 'persistent' | 'wildfire' | 'agricultural';
 
+/** WebSocket event taxonomy (server /ws/live), KB §21.6. */
+export type WsEventType =
+  | 'fire:new'
+  | 'fire:classified'
+  | 'persistence:detected'
+  | 'alert:triggered'
+  | 'system:status';
+
 export type IndustrialSubtype =
   | 'refinery'
   | 'steel'
@@ -75,6 +83,8 @@ export interface LogLine {
   ts: number;
   kind: 'ingest' | 'classify' | 'alert' | 'system';
   text: string;
+  /** WS taxonomy tag, when this line came from the live server feed. */
+  tag?: WsEventType;
 }
 
 export interface Filters {

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 export interface ChatMsg { role: 'user' | 'assistant' | 'tool'; content: string; name?: string }
-interface AgentSettings { baseUrl: string; model: string; key: string }
+export interface AgentSettings { baseUrl: string; model: string; key: string }
 
 const LS_KEY = 'tw.agent.settings';
 const load = (): AgentSettings => {

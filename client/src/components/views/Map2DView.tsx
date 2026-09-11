@@ -11,6 +11,8 @@ import { useAnalyticsStore } from '@/store/useAnalyticsStore';
 import { useMapDiagStore } from '@/store/useMapDiagStore';
 import { filterEvents } from '@/selectors/fireSelectors';
 import { syncDuckDB } from '@/features/analytics/DuckDBEngine';
+import { minZoomForCover } from '@/lib/geo/viewClamp';
+import { gibsDate, GIBS_ATTRIBUTION } from '@/config/imagery';
 import { DeckGLLayers } from '@/features/analytics/DeckGLLayers';
 
 const classColor = ['match', ['get', 'cls'], 'industrial', CLASS_META.industrial.color, 'persistent', CLASS_META.persistent.color, 'wildfire', CLASS_META.wildfire.color, CLASS_META.agricultural.color];
@@ -35,6 +37,7 @@ export function Map2DView() {
   const layers = useAnalyticsStore((s) => s.layers);
   const timeRange = useAnalyticsStore((s) => s.timeRange);
   const setDuckDBReady = useAnalyticsStore((s) => s.setDuckDBReady);
+  const webgl = useMapDiagStore((s) => s.webgl);
 
   const filtered = useMemo(
     () => filterEvents(events, filters).filter((e) => e.detectedAt >= timeRange.start && e.detectedAt <= timeRange.end),
@@ -54,6 +57,10 @@ export function Map2DView() {
 
   useEffect(() => {
     if (!container.current) return;
+    
+    // If WebGL rasterization is broken, ViewStage will render FallbackWorldMap instead
+    if (webgl && !webgl.rasterizes) return;
+
     let disposed = false;
     let pulseTimer: number | undefined;
 
@@ -61,17 +68,34 @@ export function Map2DView() {
       container: container.current,
       style: makeWorldVectorStyle(),
       center: INDIA_CENTER,
-      zoom: 1.4,
-      minZoom: 0.6,
+      zoom: Math.max(1.4, minZoomForCover(container.current.clientWidth, container.current.clientHeight)),
+      minZoom: minZoomForCover(container.current.clientWidth, container.current.clientHeight),
+      maxZoom: 12,
+      // NOTE: no maxBounds. The minZoom-cover guarantee + renderWorldCopies:false
+      // already lock the world to the screen; maxBounds at exactly ±180 fights the
+      // cover zoom in constrainInternal and crashes the constraint solver
+      // (TypeError reading '0' of null in _calcMatrices during resize).
+      renderWorldCopies: false,
       attributionControl: false,
-      renderWorldCopies: true,
     });
     if (import.meta.env.DEV) (window as unknown as { __twmap?: MLMap }).__twmap = map;
 
     useMapDiagStore.getState().reset();
 
     // Never trust initial layout: force resize on any container change.
-    const ro = new ResizeObserver(() => map.resize());
+    // Guard: setMinZoom only for a real laid-out container, clamped below maxZoom,
+    // and error-isolated — a resize exception must never take the map down.
+    const ro = new ResizeObserver(() => {
+      try {
+        map.resize();
+        const el = container.current;
+        if (el && el.clientWidth > 0 && el.clientHeight > 0) {
+          map.setMinZoom(Math.min(11.9, minZoomForCover(el.clientWidth, el.clientHeight)));
+        }
+      } catch (err) {
+        console.error('[map2d] resize guard:', err);
+      }
+    });
     ro.observe(container.current);
 
     map.on('error', (e) => useMapDiagStore.getState().pushError(String(e.error?.message ?? 'map error')));
@@ -91,6 +115,7 @@ export function Map2DView() {
       map.addLayer({ id: 'fires-halo', type: 'circle', source: 'fires', paint: {
         'circle-radius': ['interpolate', ['linear'], ['get', 'risk'], 0, 6, 100, 20],
         'circle-color': classColor as never, 'circle-opacity': 0.16, 'circle-blur': 0.5 } });
+      
       // Animated pulse ring for persistent sources (2D parity with globe ringsData)
       map.addLayer({ id: 'fires-pulse', type: 'circle', source: 'fires', filter: ['==', ['get', 'pers'], 1], paint: {
         'circle-radius': 6, 'circle-opacity': 0, 'circle-stroke-color': CLASS_META.persistent.color,
@@ -102,6 +127,18 @@ export function Map2DView() {
         'circle-color': classColor as never, 'circle-stroke-color': '#0b0f14', 'circle-stroke-width': 1 } });
       map.addLayer({ id: 'facilities', type: 'circle', source: 'facilities', paint: {
         'circle-radius': 2.5, 'circle-color': '#10161d', 'circle-stroke-color': '#7d8da1', 'circle-stroke-width': 1 } });
+      // NASA GIBS imagery raster (no key; daily composite) — under the vector fills.
+      if (!map.getSource('gibs')) {
+        map.addSource('gibs', {
+          type: 'raster',
+          tiles: [`https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_SNPP_CorrectedReflectance_TrueColor/default/${gibsDate()}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`],
+          tileSize: 256,
+          attribution: GIBS_ATTRIBUTION,
+          maxzoom: 9,
+        });
+        map.addLayer({ id: 'imagery', type: 'raster', source: 'gibs', paint: { 'raster-opacity': 0.9, 'raster-fade-duration': 300 } }, 'countries-fill');
+        map.setLayoutProperty('imagery', 'visibility', useAnalyticsStore.getState().layers.imagery ? 'visible' : 'none');
+      }
 
       const t0 = performance.now();
       pulseTimer = window.setInterval(() => {
@@ -159,12 +196,7 @@ export function Map2DView() {
     });
     map.on('click', 'facilities', (e) => {
       const p = e.features?.[0]?.properties;
-      if (!p) return;
-      clickPopupRef.current?.remove();
-      clickPopupRef.current = new maplibregl.Popup({ offset: 10 })
-        .setLngLat(e.lngLat)
-        .setHTML(`<div class="map-pop"><b>${p.name}</b><br/>${p.subtype} · hazard ${p.hazard}</div>`)
-        .addTo(map);
+      if (p?.fid) useFireStore.getState().selectFacility(String(p.fid));
     });
 
     return () => {
@@ -183,7 +215,7 @@ export function Map2DView() {
     };
     // Mount-once effect: the map instance is created a single time; data updates
     // flow through the dedicated source/marker/focus effects below.
-  }, []);
+  }, [webgl]);
 
   useEffect(() => {
     const src = mapInstance?.getSource('fires') as GeoJSONSource | undefined;
@@ -208,6 +240,10 @@ export function Map2DView() {
     vis('fires-ring', layers.persistentRings);
     vis('fires-pulse', layers.persistentRings);
     vis('night', layers.nightTexture);
+    vis('imagery', layers.imagery);
+    if (mapInstance.getLayer('countries-fill')) {
+      mapInstance.setPaintProperty('countries-fill', 'fill-opacity', layers.imagery ? 0.25 : 0.9);
+    }
     mapInstance.setPaintProperty('countries-fill', 'fill-color', (layers.choropleth ? HEAT_RAMP : LAND) as never);
     labelMarkersRef.current.forEach((m) => { (m.getElement() as HTMLElement).style.display = layers.labels ? '' : 'none'; });
   }, [layers, mapInstance]);

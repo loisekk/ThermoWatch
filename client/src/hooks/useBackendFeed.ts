@@ -1,12 +1,14 @@
 import { useEffect } from 'react';
 import { connectLive, type LiveMessage } from '@/services/api/liveSocket';
-import { api } from '@/services/api/client';
+import { api, waitUntilHealthy } from '@/services/api/client';
 import { mapServerEvents } from '@/services/api/mappers';
 import { useFireStore } from '@/store/useFireStore';
 
 /** When the FastAPI backend is reachable, server events replace the local sim feed.
  *  Consumes the full WS taxonomy: fire:new adopts events, the classified /
- *  persistence / alert frames drive the console ticker + alert board. */
+ *  persistence / alert frames drive the console ticker + alert board.
+ *  Cold-start resilient: probes healthz on a retry ladder, then keeps a 30 s
+ *  re-probe so the feed flips back to LIVE when a sleeping Render instance wakes. */
 function onLiveMessage(msg: LiveMessage): void {
   const st = useFireStore.getState();
 
@@ -27,28 +29,47 @@ function onLiveMessage(msg: LiveMessage): void {
   }
 }
 
+function attachFeed(): () => void {
+  const store = useFireStore.getState();
+  store.setSource('server');
+  void api
+    .get<unknown[]>('/api/v1/events?window_hours=336')
+    .then((evts) => useFireStore.getState().setServerEvents(mapServerEvents(evts)))
+    .catch(() => { /* initial fetch failed; WS may still deliver */ });
+  return connectLive({
+    onEvents: (events) => useFireStore.getState().adoptServerEvents(mapServerEvents(events)),
+    onMessage: onLiveMessage,
+    onStatus: (online) => useFireStore.getState().setSource(online ? 'server' : 'sim'),
+  });
+}
+
 export function useBackendFeed(): void {
   useEffect(() => {
     const store = useFireStore.getState();
     let dispose: (() => void) | undefined;
+    let wakeTimer: number | undefined;
     let alive = true;
 
-    api.health()
-      .then(() => {
-        if (!alive) return;
-        store.setSource('server');
-        void api
-          .get<unknown[]>('/api/v1/events?window_hours=336')
-          .then((evts) => useFireStore.getState().setServerEvents(mapServerEvents(evts)))
-          .catch(() => { /* initial fetch failed; WS may still deliver */ });
-        dispose = connectLive({
-          onEvents: (events) => useFireStore.getState().adoptServerEvents(mapServerEvents(events)),
-          onMessage: onLiveMessage,
-          onStatus: (online) => useFireStore.getState().setSource(online ? 'server' : 'sim'),
-        });
-      })
-      .catch(() => store.setSource('sim'));
+    const tryConnect = () => {
+      if (!alive || dispose) return;
+      dispose = attachFeed();
+    };
 
-    return () => { alive = false; dispose?.(); };
+    waitUntilHealthy()
+      .then((ok) => {
+        if (!alive) return;
+        if (ok) tryConnect();
+        else store.setSource('sim');
+      });
+
+    // Every 30 s re-probe: if we're offline and Render has woken, connect up.
+    const tick = async () => {
+      if (!alive || dispose) return;
+      const ok = await waitUntilHealthy([0]).catch(() => false);
+      if (alive && ok && !dispose) tryConnect();
+    };
+    wakeTimer = window.setInterval(() => void tick(), 30_000);
+
+    return () => { alive = false; dispose?.(); if (wakeTimer) window.clearInterval(wakeTimer); };
   }, []);
 }

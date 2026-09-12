@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "bun run src/main.ts",
+    "firms:test": "bun run src/firmsTest.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": { "typescript": "^5.9.2", "@types/bun": "^1.2.0" }

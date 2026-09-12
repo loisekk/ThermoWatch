@@ -15,3 +15,9 @@ server/api/app/ml/models/
 .env.*
 .vscode/
 *.log
+
+# secrets - never commit
+server/ingest/.env
+server/api/.env
+client/.env
+

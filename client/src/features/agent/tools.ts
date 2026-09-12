@@ -1,4 +1,4 @@
-import { api } from '@/services/api/client';
+import { api, API_BASE } from '@/services/api/client';
 
 /** Tools the LLM agent may call — all execute against OUR FastAPI, key never leaves browser. */
 export const TOOL_DEFS = [
@@ -24,6 +24,11 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
       default: return JSON.stringify({ error: `unknown tool ${name}` });
     }
   } catch (e) {
-    return JSON.stringify({ error: (e as Error).message });
+    return JSON.stringify({
+      error: (e as Error).message,
+      hint: (e as Error).message.includes('Failed to fetch') || (e as Error).name === 'AbortError'
+        ? `backend unreachable at ${API_BASE}. Deployed site: set VITE_API_URL in Vercel env + REDEPLOY (build-time inline). Local: start FastAPI or add client/.env.local then restart.`
+        : undefined,
+    });
   }
 }

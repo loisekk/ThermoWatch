@@ -8,6 +8,7 @@ Broadcast types:
   - system:status        30 s heartbeat (clients + buffered event count)
 """
 import asyncio
+import re
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -15,6 +16,10 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.core.config import settings
 
 router = APIRouter()
+
+# Compiled once at import; used by both the WS origin gate (below) and mirrors the
+# CORS middleware's allow_origin_regex so REST and WS agree on every origin.
+_ORIGIN_RE = re.compile(settings.origin_regex)
 
 
 class Manager:
@@ -68,9 +73,11 @@ manager = Manager()
 
 @router.websocket("/ws/live")
 async def live(ws: WebSocket):
-    # Origin allow-list (server-to-server clients send no Origin and are allowed).
-    origin = ws.headers.get("origin") or ""
-    if origin and not any(origin.rstrip("/") == o.rstrip("/") for o in settings.origins):
+    # Origin allow-list via the same regex the CORS middleware uses (server-to-server
+    # clients send no Origin and are allowed). Regex, not exact-match: Vercel rotates
+    # preview/deployment URLs and exact lists break on every rotation.
+    origin = (ws.headers.get("origin") or "").rstrip("/")
+    if origin and not _ORIGIN_RE.fullmatch(origin):
         await ws.close(code=4403)
         return
     await manager.connect(ws)

@@ -1,0 +1,242 @@
+{
+  "model": "tw-ensemble-v1",
+  "trained_at": "2026-09-08T19:50:21.697131+00:00",
+  "git_commit": null,
+  "dataset": {
+    "source": "synthetic",
+    "n_samples": 3995,
+    "label_provenance": {
+      "label_rule": "constructed per-class thermal signatures (SIH26162 \u00a727.2)",
+      "generator_seed": 7,
+      "n_generated": 3995
+    },
+    "class_counts": {
+      "refinery": 487,
+      "steel": 390,
+      "gas_flare": 341,
+      "cement": 341,
+      "smelter": 292,
+      "waste_incineration": 243,
+      "power_plant": 390,
+      "chemical": 292,
+      "unknown_industrial": 439,
+      "natural_fire": 780
+    }
+  },
+  "split": {
+    "train": 2793,
+    "val": 598,
+    "test": 604,
+    "stratified": true
+  },
+  "metrics": {
+    "macro_f1": 0.8774,
+    "weighted_f1": 0.8891,
+    "per_class": {
+      "refinery": {
+        "precision": 0.8659,
+        "recall": 0.9595,
+        "f1": 0.9103,
+        "support": 74
+      },
+      "steel": {
+        "precision": 0.7581,
+        "recall": 0.7966,
+        "f1": 0.7769,
+        "support": 59
+      },
+      "gas_flare": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 52
+      },
+      "cement": {
+        "precision": 0.8333,
+        "recall": 0.8654,
+        "f1": 0.8491,
+        "support": 52
+      },
+      "smelter": {
+        "precision": 0.725,
+        "recall": 0.6591,
+        "f1": 0.6905,
+        "support": 44
+      },
+      "waste_incineration": {
+        "precision": 0.878,
+        "recall": 0.973,
+        "f1": 0.9231,
+        "support": 37
+      },
+      "power_plant": {
+        "precision": 0.8772,
+        "recall": 0.8475,
+        "f1": 0.8621,
+        "support": 59
+      },
+      "chemical": {
+        "precision": 0.9348,
+        "recall": 0.9773,
+        "f1": 0.9556,
+        "support": 44
+      },
+      "unknown_industrial": {
+        "precision": 0.9057,
+        "recall": 0.7273,
+        "f1": 0.8067,
+        "support": 66
+      },
+      "natural_fire": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 117
+      }
+    }
+  },
+  "confusion_matrix": {
+    "labels": [
+      "refinery",
+      "steel",
+      "gas_flare",
+      "cement",
+      "smelter",
+      "waste_incineration",
+      "power_plant",
+      "chemical",
+      "unknown_industrial",
+      "natural_fire"
+    ],
+    "matrix": [
+      [
+        71,
+        3,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        8,
+        47,
+        0,
+        0,
+        4,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        52,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        45,
+        0,
+        0,
+        7,
+        0,
+        0,
+        0
+      ],
+      [
+        3,
+        9,
+        0,
+        0,
+        29,
+        0,
+        0,
+        0,
+        3,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        36,
+        0,
+        0,
+        1,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        9,
+        0,
+        0,
+        50,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        43,
+        1,
+        0
+      ],
+      [
+        0,
+        3,
+        0,
+        0,
+        7,
+        5,
+        0,
+        3,
+        48,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        117
+      ]
+    ]
+  },
+  "inference_ms_p50": 80.57,
+  "limitations": [
+    "Proxy labels: OSM tag proximity / synthetic signatures \u2014 not on-site or media verified",
+    "Synthetic data reproduces documented thermal signatures; train on real FIRMS archive before operational use",
+    "FIRMS misses fires below ~375 m\u00b2 (sensor limit) \u2014 recall ceiling, not model failure",
+    "Cloud-cover observation gaps not modelled",
+    "UI 4-class view is a documented projection of this 10-way posterior (see /model/card)"
+  ]
+}

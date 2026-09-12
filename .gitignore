@@ -5,7 +5,7 @@ dist/
 .venv/
 __pycache__/
 *.pyc
-server/api/app/ml/models/
+server/api/app/ml/models/*joblib*
 .DS_Store
 
 # security & artifacts

@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, HTTPException, Query
 
 from app.data.facilities import FACILITIES
@@ -42,4 +44,11 @@ def facilities():
 
 @router.get("/healthz")
 def healthz():
-    return {"status": "ok", "service": "thermowatch-api", "realtime_claim": "near-real-time (FIRMS 3-6h latency)"}
+    """Uptime-robot / cron keep-warm probe — no auth in front of it by design."""
+    return {
+        "status": "ok",
+        "service": "thermowatch-api",
+        "version": "1.0.0-sih",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "realtime_claim": "near-real-time (FIRMS 3-6h latency)",
+    }

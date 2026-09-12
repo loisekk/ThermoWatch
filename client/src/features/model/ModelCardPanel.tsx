@@ -4,7 +4,7 @@ import Chip from '@mui/material/Chip';
 import Paper from '@mui/material/Paper';
 import Skeleton from '@mui/material/Skeleton';
 import Typography from '@mui/material/Typography';
-import { api } from '@/services/api/client';
+import { api, API_BASE } from '@/services/api/client';
 
 interface PerClass { precision: number; recall: number; f1: number; support: number }
 interface EvalReport {
@@ -25,7 +25,14 @@ export function ModelCardPanel() {
     api.get<Card>('/api/v1/model/card').then(setCard).catch(() => setErr(true));
   }, []);
 
-  if (err) return <Alert severity="warning">Backend offline — model card unavailable. Start FastAPI (port 8000).</Alert>;
+  if (err) return (
+    <Alert severity="warning">
+      Backend unreachable at {API_BASE}.{' '}
+      {API_BASE.includes('localhost')
+        ? 'Start FastAPI (port 8000) or set VITE_API_URL.'
+        : 'Render instance may be waking — retrying; if this persists check TW_CORS_ORIGINS includes this site.'}
+    </Alert>
+  );
   if (!card) return <Skeleton variant="rectangular" height={320} />;
   const ev = card.eval;
 

@@ -21,3 +21,13 @@ export const api = {
   post: <T,>(path: string, body: unknown) => request<T>(path, { method: 'POST', body: JSON.stringify(body) }),
   health: () => request<{ status: string }>('/api/v1/healthz', undefined, 8000),
 };
+
+/** Render free-tier cold-start resilience: retry healthz on a backoff ladder so the
+ *  feed flips to LIVE when the instance wakes, instead of failing on the first probe. */
+export async function waitUntilHealthy(tries = [0, 5000, 15000, 30000]): Promise<boolean> {
+  for (const d of tries) {
+    if (d) await new Promise((r) => setTimeout(r, d));
+    try { await request('/api/v1/healthz', undefined, 25000); return true; } catch { /* retry */ }
+  }
+  return false;
+}

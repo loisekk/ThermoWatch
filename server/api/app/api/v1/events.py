@@ -42,9 +42,11 @@ def kpis():
 def facilities():
     return FACILITIES
 
-@router.get("/healthz")
+@router.api_route("/healthz", methods=["GET", "HEAD"])
 def healthz():
-    """Uptime-robot / cron keep-warm probe — no auth in front of it by design."""
+    """Uptime-robot / cron keep-warm probe — no auth in front of it by design.
+    HEAD is accepted too: uptime monitors probe with HEAD, and Starlette's default
+    GET-only route would otherwise answer 405 (Render's internal GET checker is fine)."""
     return {
         "status": "ok",
         "service": "thermowatch-api",

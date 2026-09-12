@@ -36,7 +36,10 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(title="ThermoWatch API", version="0.2.0",
               description="SIH26162 — multi-class industrial fire classification & persistent thermal source intelligence",
               lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=settings.origins,
+# Regex origin allow-list (Vercel prod + every preview/deployment URL + localhost).
+app.add_middleware(CORSMiddleware,
+                   allow_origins=settings.origins,          # keep the exact list too (harmless)
+                   allow_origin_regex=settings.origin_regex,  # the gate that never breaks on URL rotation
                    allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 app.include_router(api_router, prefix=settings.api_v1)
 app.include_router(live_router, prefix=settings.api_v1)

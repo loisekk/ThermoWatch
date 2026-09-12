@@ -193,3 +193,13 @@ math in client/src/lib/__tests__/tiles.test.ts.
 - Global shortcuts ignore typing surfaces (agent chat, forms) — `isTypingTarget` guard + unit tests.
 - Agent settings: draft ? Save / Cancel / Test connection (key stays local, never auto-written).
 - Manual Model Run exposes the full feature contract + lat/lon + wind + spread params, scenario presets, copy-JSON, and 4-class probability bars; server PredictRequest accepts detections_30d + frp_stability.
+
+## FIRMS live ingestion — secrets & deployment
+
+The **puller** is the Bun worker (local `bun run dev` or the GitHub Actions `ingest-cron`); Render hosts the API/WS and only **receives** data.
+
+**Local**: copy `server/ingest/.env.example` ? `server/ingest/.env`, set `FIRMS_API_KEY` (https://firms.modaps.eosdis.nasa.gov/api/map_key/), `TW_API_URL=http://127.0.0.1:8000` (use 127.0.0.1 — Bun resolves localhost to ::1, uvicorn binds IPv4). Self-test: `bun run firms:test`.
+
+**GitHub Actions secrets** (Settings ? Secrets ? Actions): `FIRMS_API_KEY`, `TW_API_URL=https://<render-app>.onrender.com`, `TW_INGEST_TOKEN` (same value as the API's `TW_INGEST_TOKEN` env on Render). The committed `ingest-cron` workflow runs every 15 min (`SINGLE_SHOT=1`) and doubles as the keep-warm ping.
+
+**Worker notes:** FIRMS area endpoint = `{KEY}/{SOURCE}/{bbox}/{days_back 1..5}/{YYYY-MM-DD}`; the worker self-calibrates the archive edge at boot (probe ladder =3 req). `POLL_MS=900000` (15 min ˜ 4 req/h, far under the 100/h key limit).

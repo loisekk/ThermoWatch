@@ -101,7 +101,9 @@ def collect_files() -> list[Path]:
 
 def main() -> int:
     try:
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        reconfigure = getattr(sys.stdout, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="replace")
     except Exception:
         pass  # non-Windows / redirected stdout already handled
     files = collect_files()

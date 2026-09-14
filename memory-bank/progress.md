@@ -46,6 +46,32 @@
   rehearsal captured: OSM LIVE chip 516 bld / canvas host / GL opt-in honestly gated by
   the rasterization probe on this box.**
 
+### Session 24 — T9 clarity pass, T10 GL rescue ladder, T13 3D-for-any-hotspot
+- **T9 carto (`ef5f7a6`):** cased roads (casing y=0.020 full width + fill ×0.62 y=0.022,
+  roadFill/roadFillRes by class), roof caps (×1.18) + merged EdgesGeometry outlines
+  (0.55), water shoreline line-segments, scatterInPolygon canopy (220/km², cap 300/poly,
+  deterministic), halo labels (facility prio-0 → water → wood → landuse → roads, cap 12,
+  stroke+fill canvas sprites), CARTO palette module (pure, tested), scale bar
+  (scaleBarMeters, 120 px target) + north arrow, hover provenance tooltip via
+  pickBuilding (PIP first, outline ≤25 m), OSM MESHES truth chip, carto canvas parity.
+- **Crash fix (same commit):** ALL mergeGeometries sites guard empty arrays —
+  `mergeGeometries([])` throws `Cannot read properties of undefined (reading 'index')`
+  in three.js; the empty road-fill pass (all residential/service area) was the live
+  crash, and `buildOsmScene: stats + dispose` was its unit-test shadow.
+- **T10 GL ladder (`f5f2b68`):** `glSelfCheck.ts` pure (pixelVariance, UNIFORM_RASTER_
+  VARIANCE=1e-3, resolveSceneRenderer). Routing = forced && rasterizes===true && !pinned.
+  Frame-2 same-frame readPixels self-check; webglcontextlost → preventDefault + report;
+  watchdog: two frozen 1.5 s checks → pin (no per-frame readPixels). Opaque renderer +
+  setClearColor(CARTO.ground) (white-paint ban). SceneErrorBoundary → CanvasScene
+  in-dialog + `SCENE ERROR — CANVAS FALLBACK` chip. Pin ladder: one remount, second
+  death = permanent `GL RASTER UNRELIABLE HERE (reason) — PINNED TO CANVAS2D` chip;
+  try-GL button resets pin/attempts. North arrow = inline SVG (no <img> in dialog).
+- **T13 (`a53b8d2`):** `openScene/closeScene` on useUIStore; `V` shortcut (isTypingTarget
+  guarded, opens selected event's scene); dossier header `3D scene · V` action;
+  `&scene=<eventId>` deep link (dialog opens when the event hits the feed).
+- Gates: pytest 44 · vitest 24 files / 108 tests · tsc 0 · claim_audit PASS (171 files).
+  Commits: `ef5f7a6` → `f5f2b68` → `a53b8d2`; tree clean; origin push still owed.
+
 ### Ingestion & data
 - Bun ingest worker: FIRMS area-query polling (bbox 68,6,98,36 India), archive-edge
   calibration, retry-queue publisher, deterministic sim feed fallback, `SINGLE_SHOT` cron

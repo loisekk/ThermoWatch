@@ -1,12 +1,22 @@
 # Active Context
 
-> Status as of 2026-09-14 · HEAD `main` = `5845fa0` (Session 23 pack applied on top of the dirty working tree; uncommitted).
+> Status as of 2026-09-14 (late) · HEAD `main` = `1d61b2d` — "feat(scene): live OSM context —
+> real buildings/trees/roads with honest degradation". The FULL working tree (Session 23 +
+> 23.5 + prior drift) was committed in this single commit; working tree is now CLEAN.
 
 ## Current Focus
-- Session 23 fully gated (**pytest 34 · vitest 83 · tsc · claims · build**) and **Session
-  23.5 (live OSM scene context)** implemented and live-verified against the real Overpass
-  API (Jamshedpur: 226 building footprints, 400 roads, 16 water), now at **pytest 42 ·
-  vitest 89 · tsc clean · claims pass (169 files) · build warning-free**.
+- **T8 (Session 23.5) is APPLIED, GATED, COMMITTED and LIVE-REHEARSED.** All gates re-verified
+  post-commit: pytest 42 · vitest 22 files / 89 tests · tsc 0 errors · claim_audit PASS
+  (169 files) · `npm run build` warning-free (1 m 1 s).
+- Live rehearsal via Playwright (local API :8000 + Vite dev server): incident dossier
+  TW-00008 → SCENE CONTEXT PROVENANCE fetched live from Overpass (516 buildings, 400 roads,
+  height provenance 0 % tagged / 100 % estimated); 3D scene chip
+  `CONTEXT: OSM LIVE · 516 bld / 2 trees · snapshot 1 m ago` + `refresh context` button;
+  footer carries `context = osm buildings/vegetation/roads (live snapshot · © osm odbl)`.
+- On THIS dev box the scene auto-routes to **canvas2d** even with "try GL" pressed — the
+  GL gate is `capability?.rasterizes` (probe fails here, documented constraint). A genuine
+  ThreeScene/WebGL frame can only be captured on a healthy host; canvas host + GL-attempt
+  screenshots captured in rehearsal.
 - Continuous hardening of the FIRMS-live ingestion pipeline and deployment story
   (Render API + GH Actions `ingest-cron` every 15 min, Vercel client, CORS robustness).
 - The dev machine has broken WebGL frame presentation → rendering resilience
@@ -37,10 +47,9 @@
   (exit 0), README/USER_GUIDE/ARCHITECTURE updated.
 
 ## Working Tree State (IMPORTANT)
-The working tree had **many uncommitted modifications before Session 23** (pre-existing
-dev-environment drift across client/server/scripts/docs). Session 23 added the untracked
-files above on top of that. **Do NOT assume the committed HEAD represents the working
-code** — consider working-tree diffs before making changes.
+- **CLEAN as of commit `1d61b2d`** (2026-09-14 ~23:16 IST). The whole Session 20→23.5 stack
+  plus prior environment drift went into ONE commit with the T8 message, because router.py
+  imports the then-untracked news/scene modules — the tree was only coherent as a unit.
 
 ## Active Decisions & Considerations
 - News wire is **poll-based** (5-min client, 300 s server TTL): the WS taxonomy
@@ -53,7 +62,9 @@ code** — consider working-tree diffs before making changes.
 - All six broadcast-strip channel ids verified 2026-09-14 by `check_news_channels.mjs`.
 
 ## Next Steps (open items)
-1. Review/commit the large uncommitted working tree (or confirm it is just environment drift).
-2. Re-verify CORS curl + Vercel deployment hash == repo HEAD before demo (§6-1/6-2).
-3. Post-SIH queue (T8+): ReliefWeb appname, Guardian key, source-tier badges, LLM wire brief,
-   globe-side wire pins.
+1. Push `1d61b2d` to origin when ready (`origin/main` still at `5845fa0`).
+2. Re-verify CORS curl + Vercel deployment hash == repo HEAD before demo (§6-1/6-2) —
+   still owed; Vercel rebuilds from the pushed commit.
+3. Rehearse full demo (≤5 min script + 45 s scene beat) by **Sep 17**, then submit.
+4. Post-SIH queue (T8+): ReliefWeb provider, Guardian key, source-tier badges, LLM wire
+   brief, globe-side wire pins.

@@ -41,8 +41,10 @@
   top-FRP hotspot. CanvasScene parity: footprint top faces (≤80), tree dots (≤300),
   road strokes, patch fills. EventDrawer SCENE CONTEXT PROVENANCE section (counts,
   height split, nearest-building line, `OSM is community-mapped` honesty note).
-- Gate status: pytest 42 · vitest 89 (21 files) · tsc clean · claims pass (169 files) ·
-  build warning-free.
+- Gate status: pytest 42 · vitest 89 (22 files) · tsc clean · claims pass (169 files) ·
+  build warning-free. **Committed as `1d61b2d` (single commit incl. prior drift); live
+  rehearsal captured: OSM LIVE chip 516 bld / canvas host / GL opt-in honestly gated by
+  the rasterization probe on this box.**
 
 ### Ingestion & data
 - Bun ingest worker: FIRMS area-query polling (bbox 68,6,98,36 India), archive-edge

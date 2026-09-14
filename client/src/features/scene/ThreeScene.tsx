@@ -9,6 +9,7 @@ import { buildEllipseLine, buildHotspotField, buildPlume,
 import { buildLabelSprite, buildOsmScene, buildHaloLabel,
   pickBuilding, type BuildingPick, type SceneContext } from '@/features/scene/osmScene';
 import { CARTO } from '@/features/scene/cartography';
+import { pixelVariance, UNIFORM_RASTER_VARIANCE } from './glSelfCheck';
 
 const UNIT = 100; // 1 scene unit = 100 m
 const HAZ_HEIGHT: Record<string, number> = { 'G-III': 6, 'G-II': 4, 'G-I': 2.5 };
@@ -31,13 +32,15 @@ interface ThreeSceneProps {
   onOsmStats?: (s: { meshes: number }) => void;
   /** T9 scale bar / north arrow: camera distance (units) + yaw (deg), 250 ms. */
   onCamera?: (distUnits: number, yawDeg: number) => void;
+  /** T10 GL rescue ladder: uniform raster / context lost / frozen frames. */
+  onGlDead?: (reason: string) => void;
 }
 
 /** Three.js incident scene — used only where WebGL actually rasterizes.
  *  With detections: one additive sprite per FIRMS detection + 2σ ellipse +
  *  illustrative plume + replay; without: honest centroid mode. */
 export function ThreeScene({ ev, facilities, detections, replayT, osm, callout,
-  onHover, onOsmStats, onCamera }: ThreeSceneProps) {
+  onHover, onOsmStats, onCamera, onGlDead }: ThreeSceneProps) {
   const mount = useRef<HTMLDivElement>(null);
   // Replay is scrubbed at high frequency — feed it to the render loop through a
   // ref so the WebGL context is never torn down for a slider drag.
@@ -46,12 +49,23 @@ export function ThreeScene({ ev, facilities, detections, replayT, osm, callout,
 
   useEffect(() => {
     if (!mount.current) return;
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    // T10: opaque canvas with a ground-coloured clear — the white/uninitialised
+    // paint is banned outright; a lost context can only ever show the ground tone.
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(2, devicePixelRatio));
     renderer.setSize(mount.current.clientWidth, mount.current.clientHeight);
+    renderer.setClearColor(new THREE.Color(CARTO.ground), 1);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     mount.current.appendChild(renderer.domElement);
+
+    // T10 GL rescue ladder — context loss is reported, never silently swallowed.
+    let glDead = false;
+    const die = (reason: string) => {
+      if (!glDead) { glDead = true; onGlDead?.(reason); }
+    };
+    const onContextLost = (e: Event) => { e.preventDefault(); die('context lost'); };
+    renderer.domElement.addEventListener('webglcontextlost', onContextLost);
 
     const scene = new THREE.Scene();
     scene.fog = new THREE.Fog(0x0b0f14, 60, 220);
@@ -243,6 +257,8 @@ export function ThreeScene({ ev, facilities, detections, replayT, osm, callout,
     let raf = 0;
     const t0 = performance.now();
     let lastMs = t0;
+    let frames = 0;
+    let rasterChecked = false;
     const loop = () => {
       const nowMs = performance.now();
       const dt = Math.min(0.1, (nowMs - lastMs) / 1000);
@@ -253,9 +269,40 @@ export function ThreeScene({ ev, facilities, detections, replayT, osm, callout,
       plume?.update(dt);
       apply();
       renderer.render(scene, camera);
+      frames++;
+      // T10 one-shot in-scene raster self-check: readPixels in the SAME frame
+      // right after render (valid without preserveDrawingBuffer). A uniform
+      // raster means the context presents nothing — pin to canvas, never black.
+      if (!rasterChecked && frames === 2 && !glDead) {
+        rasterChecked = true;
+        try {
+          const gl = renderer.getContext();
+          const w = gl.drawingBufferWidth;
+          const h = gl.drawingBufferHeight;
+          const px = new Uint8Array(32 * 32 * 4);
+          gl.readPixels(((w / 2) | 0) - 16, ((h / 2) | 0) - 16, 32, 32, gl.RGBA, gl.UNSIGNED_BYTE, px);
+          if (pixelVariance(px) < UNIFORM_RASTER_VARIANCE) die('uniform raster');
+        } catch {
+          die('raster read failed');
+        }
+      }
       raf = requestAnimationFrame(loop);
     };
     loop();
+    // T10 frozen-frame watchdog: no frame advance across two 1.5 s checks is a
+    // wedged context (no per-frame readPixels — one-shot only, per doctrine).
+    let seenFrames = 0;
+    let frozenChecks = 0;
+    const watchdog = window.setInterval(() => {
+      if (glDead) return;
+      if (frames === seenFrames) {
+        frozenChecks++;
+        if (frozenChecks >= 2) die('frozen frames');
+      } else {
+        frozenChecks = 0;
+        seenFrames = frames;
+      }
+    }, 1500);
 
     return () => {
       cancelAnimationFrame(raf);
@@ -264,7 +311,9 @@ export function ThreeScene({ ev, facilities, detections, replayT, osm, callout,
       window.removeEventListener('pointerup', onUp);
       el.removeEventListener('wheel', onWheel);
       el.removeEventListener('pointermove', onHoverMove);
+      renderer.domElement.removeEventListener('webglcontextlost', onContextLost);
       window.clearInterval(camTimer);
+      window.clearInterval(watchdog);
       field?.dispose();
       if (ellipseLine) {
         ellipseLine.geometry.dispose();

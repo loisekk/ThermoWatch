@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Box as BoxIcon, X, RefreshCw } from 'lucide-react';
 import { useUIStore } from '@/store/useUIStore';
 import { useFireStore } from '@/store/useFireStore';
@@ -11,10 +11,21 @@ import { CanvasScene } from '@/features/scene/CanvasScene';
 import { capByFrp, replayWindow, type Detection } from '@/features/scene/sceneData';
 import { enuUnits, nearestBuildingM, type BuildingPick, type SceneContext } from '@/features/scene/osmScene';
 import { scaleBarMeters, LEGEND } from '@/features/scene/cartography';
+import { resolveSceneRenderer } from '@/features/scene/glSelfCheck';
 import { API_BASE } from '@/services/api/client';
 
 const CAMERA_FOV = 45;          // matches ThreeScene's PerspectiveCamera
 const CANVAS_FIXED_SCALE_M = 200; // iso canvas: fixed honest scale at default zoom
+
+/** T10 local boundary: a throw inside the GL scene swaps to CanvasScene in the
+ *  SAME dialog — the app-wide boundary stays as the last resort only. */
+class SceneErrorBoundary
+  extends Component<{ onError: () => void; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch() { this.props.onError(); }
+  render() { return this.state.failed ? null : this.props.children; }
+}
 
 function ageMin(iso: string | null): string {
   if (!iso) return '--';
@@ -32,12 +43,25 @@ export function Scene3DViewer() {
   const facilities = useFireStore((s) => s.facilities);
   const capability = useMapDiagStore((s) => s.capability);
   const [sceneRenderer, setSceneRenderer] = useState<'canvas2d' | 'gl'>('canvas2d');
+  // T10 GL pin ladder: first GL death = one silent remount; second = permanent
+  // honest pin (chip says why). sceneError = the local boundary caught a throw.
+  const [glAttempts, setGlAttempts] = useState(0);
+  const [pin, setPin] = useState<string | null>(null);
+  const [sceneError, setSceneError] = useState(false);
   // Per-detection buffer for the selected event (null = fetch failed/unavailable
   // → honest centroid-mode fallback, never a black scene).
   const [dets, setDets] = useState<Detection[] | null>(null);
   // null = latest; epoch ms = replay scrub position (Three only; canvas parity skips replay).
   const [replayT, setReplayT] = useState<number | null>(null);
   const ev = events.find((e) => e.id === sceneEventId) ?? null;
+
+  // T10 pin ladder: first GL death gets ONE remount attempt (fresh context),
+  // the second death pins the dialog to Canvas2D with the reason on the chip.
+  const onGlDead = (reason: string) => {
+    if (glAttempts < 1) setGlAttempts((a) => a + 1);
+    else setPin(reason);
+  };
+  useEffect(() => { setSceneError(false); }, [sceneEventId, glAttempts]);
 
   useEffect(() => {
     let on = true;
@@ -73,7 +97,14 @@ export function Scene3DViewer() {
 
   // Spot checks below must ALL run as hooks every render, so the early return
   // for a missing event sits AFTER them (null-safe when ev is undefined).
-  const renderer: 'webgl' | 'canvas2d' = sceneRenderer === 'gl' && capability?.rasterizes ? 'webgl' : 'canvas2d';
+  // T10 doctrine restore: canvas-first. GL only when the user forced it AND the
+  // probe proves rasterization AND the pin ladder has not retired GL here.
+  const renderer: 'webgl' | 'canvas2d' =
+    !sceneError && resolveSceneRenderer({
+      forced: sceneRenderer === 'gl',
+      rasterizes: capability?.rasterizes,
+      pinned: pin !== null,
+    }) === 'webgl' ? 'webgl' : 'canvas2d';
   const shown = dets ? capByFrp(dets) : null;
   const win = shown && shown.length ? replayWindow(shown) : null;
   const detCount = shown?.length ?? 0;
@@ -136,6 +167,14 @@ export function Scene3DViewer() {
           <Badge color={CLASS_META[ev.classification.primary].color}>{CLASS_META[ev.classification.primary].label}</Badge>
           <Badge color={RISK_META[ev.risk.level].color}>risk {ev.risk.score}</Badge>
           <Badge color="#8ca0b3">renderer: {renderer}</Badge>
+          {pin && (
+            <Badge color="#FFB800">
+              GL RASTER UNRELIABLE HERE ({pin}) — PINNED TO CANVAS2D · force to retry
+            </Badge>
+          )}
+          {sceneError && (
+            <Badge color="#FFB800">SCENE ERROR — CANVAS FALLBACK</Badge>
+          )}
           <Badge color={detCount ? '#FF6B35' : '#FFB800'}>
             {detCount ? `hotspots: ${detCount} (viirs 375 m)` : 'per-detection unavailable — centroid mode'}
           </Badge>
@@ -153,7 +192,10 @@ export function Scene3DViewer() {
             <RefreshCw className="h-3 w-3" /> refresh context
           </button>
           <button
-            onClick={() => setSceneRenderer(sceneRenderer === 'gl' ? 'canvas2d' : 'gl')}
+            onClick={() => {
+              setPin(null); setGlAttempts(0); setSceneError(false);
+              setSceneRenderer(sceneRenderer === 'gl' ? 'canvas2d' : 'gl');
+            }}
             className="mono rounded-sm border border-edge px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-mute hover:text-ink"
           >
             {sceneRenderer === 'gl' ? 'force canvas' : 'try GL'}
@@ -163,13 +205,18 @@ export function Scene3DViewer() {
           </button>
         </header>
         <div ref={bodyRef} className="relative min-h-0 flex-1 bg-abyss">
-          {renderer === 'webgl'
-            ? <ThreeScene ev={ev} facilities={facilities} detections={shown} replayT={replayT}
+          {renderer === 'webgl' ? (
+            <SceneErrorBoundary key={glAttempts} onError={() => setSceneError(true)}>
+              <ThreeScene ev={ev} facilities={facilities} detections={shown} replayT={replayT}
                 osm={hasOsm ? sharedCtx : null} callout={callout}
                 onHover={(pick, cx, cy) => { setHover(pick); setHoverPos({ x: cx, y: cy }); }}
                 onOsmStats={(s) => setOsmMeshes(s.meshes)}
-                onCamera={(dist, yaw) => setCam({ dist, yaw })} />
-            : <CanvasScene ev={ev} facilities={facilities} detections={shown} osm={hasOsm ? sharedCtx : null} />}
+                onCamera={(dist, yaw) => setCam({ dist, yaw })}
+                onGlDead={onGlDead} />
+            </SceneErrorBoundary>
+          ) : (
+            <CanvasScene ev={ev} facilities={facilities} detections={shown} osm={hasOsm ? sharedCtx : null} />
+          )}
           {renderer === 'webgl' && win && (
             <div className="absolute bottom-2 left-1/2 z-10 flex w-[min(520px,88%)] -translate-x-1/2 items-center gap-2 rounded-sm border border-edge bg-panel/90 px-2 py-1">
               <span className="mono text-[9px] uppercase tracking-widest text-dim">replay</span>
@@ -207,10 +254,15 @@ export function Scene3DViewer() {
               </div>
               <span className="mono mt-0.5 text-[9px] text-mute">{scaleM} m</span>
             </div>
-            <span className="mono text-[9px] leading-none text-mute" style={{
-              transform: renderer === 'webgl' ? `rotate(${cam.yaw}deg)` : undefined,
-              display: 'inline-block',
-            }}>▲N</span>
+            <span className="mono flex items-end gap-1 text-[9px] leading-none text-mute">
+              {/* T10: inline SVG only — no <img> assets inside the scene dialog */}
+              <svg width="10" height="8" viewBox="0 0 10 8" aria-hidden="true" style={{
+                transform: renderer === 'webgl' ? `rotate(${cam.yaw}deg)` : undefined,
+              }}>
+                <path d="M5 0 L9 8 L5 6 L1 8 Z" fill="currentColor" />
+              </svg>
+              <span>N</span>
+            </span>
           </div>
           {/* hover provenance tooltip (page-coords from the WebGL pointer event) */}
           {hover && renderer === 'webgl' && (
@@ -224,7 +276,11 @@ export function Scene3DViewer() {
         </div>
         <footer className="mono border-t border-edge px-3 py-1.5 text-[9px] uppercase tracking-widest text-dim">
           1 unit = 100 m · hotspots = firms viirs 375 m detections (near-real-time 3–6 h) · {hasOsm ? 'context = osm buildings/vegetation/roads (live snapshot · © osm odbl)' : 'context = schematic (osm unreachable)'} · drag orbit · wheel zoom · rings = 6/12/24 h spread forecast (model, not observation) · plume illustrative
-          {renderer === 'canvas2d' && ' · isometric canvas renderer (webgl rasterization unavailable here) · plume/replay off · osm carto'}
+          {renderer === 'canvas2d' && ` · ${pin
+            ? `gl pinned on this host (${pin})`
+            : sceneError
+              ? 'scene error — canvas fallback'
+              : 'isometric canvas renderer (webgl rasterization unavailable here)'} · plume/replay off · osm carto`}
         </footer>
       </div>
     </div>

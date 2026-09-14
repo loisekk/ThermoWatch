@@ -63,7 +63,7 @@ export const useMapDiagStore = create<MapDiagState>()((set) => ({
   setMapApi: (mapApi) => set({ mapApi }),
   setWebGL: (webgl) => set({ webgl }),
   setCapability: (capability) => set({ capability }),
-  setGlPin: (reason) => set((s) => {
+  setGlPin: (reason) => set(() => {
     const glPin: GLPin = reason
       ? { pinned: true, reason, at: Date.now() }
       : GL_PIN_OK;

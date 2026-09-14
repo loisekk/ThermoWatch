@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { pixelVariance, resolveSceneRenderer, UNIFORM_RASTER_VARIANCE } from '../glSelfCheck';
+import { pixelVariance, resolveSceneRenderer, shouldRenderSize, UNIFORM_RASTER_VARIANCE } from '../glSelfCheck';
 
 describe('pixelVariance', () => {
   it('is exactly 0 for a perfectly uniform raster (black/white paint)', () => {

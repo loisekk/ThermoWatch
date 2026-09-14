@@ -64,7 +64,16 @@ export function EventDrawer() {
             <Badge color="#8CA0B3">{e.persistence.regime}</Badge>
           </div>
         </div>
-        <button onClick={() => select(null)} aria-label="Close dossier" className="rounded p-1 text-mute hover:text-ink"><X className="h-4 w-4" /></button>
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            onClick={() => setSceneEventId(e.id)}
+            title="Open the 3D incident scene (shortcut: V)"
+            className="mono rounded-sm border border-edge px-2 py-1 text-[9px] uppercase tracking-wider text-mute hover:text-ink"
+          >
+            3D scene · V
+          </button>
+          <button onClick={() => select(null)} aria-label="Close dossier" className="rounded p-1 text-mute hover:text-ink"><X className="h-4 w-4" /></button>
+        </div>
       </header>
 
       <section className="rounded-md border border-edge bg-panel2/60 p-2.5">

@@ -6,7 +6,9 @@ const PANEL_MAP: Record<string, PanelKey> = {
   m: 'predict', k: 'model', x: 'analytics', h: 'history', n: 'news',
 };
 
-/** Reads /app.html?vp=&panel=&lat=&lon= once on mount and applies it to the stores. */
+/** Reads /app.html?vp=&panel=&lat=&lon=&scene= once on mount and applies it to the stores.
+ *  `scene=<eventId>` arms the 3D dialog: it opens as soon as that event exists in the
+ *  feed (Scene3DViewer renders null until then — post-feed-ready by construction). */
 export function useDeepLink(): void {
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
@@ -18,5 +20,7 @@ export function useDeepLink(): void {
     const lat = parseFloat(q.get('lat') ?? '');
     const lon = parseFloat(q.get('lon') ?? '');
     if (Number.isFinite(lat) && Number.isFinite(lon)) ui.requestFocus(lat, lon);
+    const scene = q.get('scene');
+    if (scene) ui.openScene(scene);
   }, []);
 }

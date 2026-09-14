@@ -34,6 +34,9 @@ interface UIState {
   setViewMode: (v: ViewMode) => void; setPanel: (p: PanelKey) => void;
   toggleAutoRotate: () => void; requestFocus: (lat: number, lon: number) => void;
     setSceneEventId: (id: string | null) => void;
+  /** T13: 3D scene for ANY hotspot — one store flag, one dialog, every view. */
+  openScene: (id: string) => void;
+  closeScene: () => void;
   selfTest: boolean;
   toggleSelfTest: () => void;
   panelSizes: Record<string, number>;
@@ -48,6 +51,8 @@ export const useUIStore = create<UIState>()((set) => ({
   toggleAutoRotate: () => set((s) => ({ autoRotate: !s.autoRotate })),
   requestFocus: (lat, lon) => set({ focus: { lat, lon, ts: Date.now() } }),
     setSceneEventId: (sceneEventId) => set({ sceneEventId }),
+    openScene: (sceneEventId) => set({ sceneEventId }),
+    closeScene: () => set({ sceneEventId: null }),
   selfTest: false,
   toggleSelfTest: () => set((s) => ({ selfTest: !s.selfTest })),
   panelSizes: loadSizes(),

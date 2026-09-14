@@ -11,6 +11,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { mulberry32 } from '@/lib/random/mulberry';
+import { CARTO, LABEL_CAP } from './cartography';
 import { toEnu } from './sceneData';
 
 export type OsmBuildingKind = 'industrial' | 'commercial' | 'residential' | 'generic';
@@ -22,10 +23,11 @@ export interface OsmBuilding {
   height_m: number;
   height_source: OsmHeightSource;
   kind: OsmBuildingKind;
+  name?: string | null;
 }
 export interface OsmTree { lat: number; lon: number; crown_m: number }
-export interface OsmRoad { points: [number, number][]; cls: string }
-export interface OsmPoly { outline: [number, number][] }
+export interface OsmRoad { points: [number, number][]; cls: string; name?: string | null }
+export interface OsmPoly { outline: [number, number][]; name?: string | null }
 export interface OsmLanduse extends OsmPoly { kind: string }
 
 export interface SceneContext {
@@ -125,6 +127,70 @@ export function nearestBuildingM(px: number, pz: number, origin: { lat: number; 
   return best;
 }
 
+/** T9 hover provenance — pure point-in-polygon (even-odd rule, scene units). */
+export function pointInPolygon(px: number, pz: number, ring: EnuU[]): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i].x, zi = ring[i].z, xj = ring[j].x, zj = ring[j].z;
+    if ((zi > pz) !== (zj > pz) && px < ((xj - xi) * (pz - zi)) / (zj - zi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+/** |area| of a ring in m² (1 scene unit = 100 m → units² × 10⁴). */
+export function shoelaceAreaM2(ring: EnuU[]): number {
+  let s = 0;
+  for (let i = 0; i < ring.length - 1; i++) s += ring[i].x * ring[i + 1].z - ring[i + 1].x * ring[i].z;
+  return (Math.abs(s) / 2) * 100 * 100;
+}
+
+/** Deterministic rejection sampling inside a polygon (bbox + PIP).
+ *  ILLUSTRATIVE density for canopy — disclosed in the legend, never a fuel model. */
+export function scatterInPolygon(ring: EnuU[], perKm2: number, seed: number, cap = 300): EnuU[] {
+  if (ring.length < 3) return [];
+  const xs = ring.map((p) => p.x), zs = ring.map((p) => p.z);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minZ = Math.min(...zs), maxZ = Math.max(...zs);
+  const n = Math.min(cap, Math.round((shoelaceAreaM2(ring) / 1e6) * perKm2));
+  const rnd = mulberry32(seed);
+  const out: EnuU[] = [];
+  let guard = n * 20;
+  while (out.length < n && guard-- > 0) {
+    const p = { x: minX + rnd() * (maxX - minX), z: minZ + rnd() * (maxZ - minZ) };
+    if (pointInPolygon(p.x, p.z, ring)) out.push(p);
+  }
+  return out;
+}
+
+export interface BuildingPick {
+  id: OsmBuilding['id'];
+  kind: OsmBuildingKind | string;
+  height_m: number;
+  height_source: string;
+  name?: string | null;
+  m: number; // 0 = inside the footprint, else outline distance in metres
+}
+
+/** Hover pick by pure math (no pick meshes — merged geometry stays cheap):
+ *  PIP over footprint rings first, else nearest outline ≤ 25 m. */
+export function pickBuilding(px: number, pz: number, origin: { lat: number; lon: number },
+                             buildings: OsmBuilding[]): BuildingPick | null {
+  for (const b of buildings) {
+    const ring = b.outline.map(([la, lo]) => enuUnits(origin, la, lo));
+    if (pointInPolygon(px, pz, ring)) {
+      return { id: b.id, kind: b.kind, height_m: b.height_m,
+               height_source: b.height_source, name: b.name ?? undefined, m: 0 };
+    }
+  }
+  const nb = nearestBuildingM(px, pz, origin, buildings);
+  if (nb && nb.m <= 25) {
+    const b = buildings.find((x) => x.id === nb.id);
+    return { id: nb.id, kind: nb.kind, height_m: b?.height_m ?? 0,
+             height_source: b?.height_source ?? '', name: b?.name ?? undefined, m: nb.m };
+  }
+  return null;
+}
+
 /** Lift every vertex of a flat geometry onto plane y (ground patches). */
 function flatPoly(geo: THREE.BufferGeometry, y: number): THREE.BufferGeometry {
   const pos = geo.getAttribute('position') as THREE.BufferAttribute;
@@ -134,22 +200,9 @@ function flatPoly(geo: THREE.BufferGeometry, y: number): THREE.BufferGeometry {
 
 export interface OsmSceneResult {
   group: THREE.Group;
-  stats: { buildings: number; trees: number; roads: number; polys: number };
+  stats: { buildings: number; trees: number; roads: number; polys: number; meshes: number };
   dispose: () => void;
 }
-
-const KIND_MATERIALS: Record<OsmBuildingKind,
-  { color: number; roughness: number; metalness: number }> = {
-  industrial: { color: 0x8a9199, roughness: 0.6, metalness: 0.35 },
-  commercial: { color: 0xa9b2bd, roughness: 0.7, metalness: 0.15 },
-  residential: { color: 0xcbb28a, roughness: 0.9, metalness: 0.05 },
-  generic: { color: 0x9d9aa0, roughness: 0.8, metalness: 0.1 },
-};
-
-const LANDUSE_TINT: Record<string, number> = {
-  farmland: 0x6b7d4f, industrial: 0x55606b, commercial: 0x5a6472,
-  residential: 0x6d6456, orchard: 0x5f7d4a,
-};
 
 /** Ring (scene units, x/z, north = −z) → THREE.Shape in SHAPE space (x, −z).
  *  Winding is corrected IN SHAPE SPACE — the frame ExtrudeGeometry/ShapeGeometry
@@ -173,41 +226,71 @@ export function ensureCCWShapeSpace(pts: EnuU[]): { x: number; y: number }[] {
   return s < 0 ? m.reverse() : m;
 }
 
-/** REAL OSM footprint rings extruded to true/estimated height, merged per kind. */
+/** REAL OSM footprint rings extruded to true/estimated height, merged per kind.
+ *  T9: fill (CARTO palette) + roof caps (top face, albedo ×1.18) + merged
+ *  EdgesGeometry outlines — reads as solid massing with crisp tops. */
 function buildingsGroup(origin: { lat: number; lon: number },
                         buildings: OsmBuilding[]): { group: THREE.Group; dispose: () => void } {
   const group = new THREE.Group();
   const byKind: Record<OsmBuildingKind, THREE.BufferGeometry[]> = {
     industrial: [], commercial: [], residential: [], generic: [],
   };
+  const roofsByKind: Record<OsmBuildingKind, THREE.BufferGeometry[]> = {
+    industrial: [], commercial: [], residential: [], generic: [],
+  };
+  const edges: THREE.BufferGeometry[] = [];
   for (const b of buildings) {
     const ring = closedCCW(b.outline.map(([la, lo]) => enuUnits(origin, la, lo)));
     if (ring.length < 4) continue;
+    const depth = Math.max(0.15, b.height_m * M_TO_U);
     const geo = new THREE.ExtrudeGeometry(shapeFromRing(ring), {
-      depth: Math.max(0.15, b.height_m * M_TO_U), bevelEnabled: false,
+      depth, bevelEnabled: false,
     });
-    geo.rotateX(-Math.PI / 2); // extrude +Z -> up +Y; shape (x,-north) -> (x, north)
+    geo.rotateX(-Math.PI / 2); // extrude +Z -> up +Y; shape (x, y=-z) -> world (x, ·, z)
     byKind[b.kind].push(geo);
+    const roof = new THREE.ShapeGeometry(shapeFromRing(ring));
+    roof.rotateX(-Math.PI / 2);
+    flatPoly(roof, depth);
+    roofsByKind[b.kind].push(roof);
+    edges.push(new THREE.EdgesGeometry(geo, 40));
   }
-  const matCache = new Map<OsmBuildingKind, THREE.MeshStandardMaterial>();
-  for (const kind of Object.keys(byKind) as OsmBuildingKind[]) {
-    const geos = byKind[kind];
-    if (!geos.length) continue;
+  const disposeList: (THREE.Material | THREE.BufferGeometry)[] = [];
+  const addMerged = (geos: THREE.BufferGeometry[], mat: THREE.Material, shadows: boolean): void => {
+    if (!geos.length) return;
     const merged = mergeGeometries(geos, false);
     geos.forEach((g) => g.dispose());
-    if (!merged) continue;
-    const mat = new THREE.MeshStandardMaterial(KIND_MATERIALS[kind]);
-    matCache.set(kind, mat);
+    if (!merged) return;
+    disposeList.push(merged, mat);
     const mesh = new THREE.Mesh(merged, mat);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
+    mesh.castShadow = shadows;
+    mesh.receiveShadow = shadows;
     group.add(mesh);
+  };
+  for (const kind of Object.keys(byKind) as OsmBuildingKind[]) {
+    addMerged(byKind[kind], new THREE.MeshStandardMaterial({
+      color: CARTO.building[kind], roughness: 0.78, metalness: 0.12,
+    }), true);
+    // roof caps: same footprint at y = height, brighter — crisp tops, no floating shells
+    addMerged(roofsByKind[kind], new THREE.MeshStandardMaterial({
+      color: new THREE.Color(CARTO.building[kind]).multiplyScalar(CARTO.roofBoost),
+      roughness: 0.6, metalness: 0.08,
+    }), false);
+  }
+  if (edges.length) {
+    const merged = mergeGeometries(edges, false);
+    edges.forEach((g) => g.dispose());
+    if (merged) {
+      const mat = new THREE.LineBasicMaterial({
+        color: CARTO.buildingOutline, transparent: true, opacity: 0.55,
+      });
+      disposeList.push(merged, mat);
+      group.add(new THREE.LineSegments(merged, mat));
+    }
   }
   return {
     group,
     dispose() {
-      group.children.forEach((c) => (c as THREE.Mesh).geometry.dispose());
-      matCache.forEach((m) => m.dispose());
+      disposeList.forEach((d) => d.dispose());
       group.clear();
     },
   };
@@ -261,26 +344,73 @@ function treesGroup(origin: { lat: number; lon: number },
   };
 }
 
-/** Merged asphalt ribbons — road geometry from real OSM highway polylines. */
+/** Merged cased roads — Google-Maps cue: dark casing under a lighter fill ribbon.
+ *  Casing = full OSM width at y=0.020; fill = ×0.62 at y=0.022, colour by class. */
 function roadsGroup(origin: { lat: number; lon: number },
                     roads: OsmRoad[]): { group: THREE.Group; dispose: () => void } {
   const group = new THREE.Group();
   if (!roads.length) return { group, dispose: () => undefined };
-  const geos: THREE.BufferGeometry[] = [];
+  const buildPass = (widthFactor: number, y: number): THREE.BufferGeometry[] => {
+    const geos: THREE.BufferGeometry[] = [];
+    for (const road of roads) {
+      const pts = road.points.map(([la, lo]) => enuUnits(origin, la, lo));
+      const halfW = (ROAD_HALF_W[road.cls] ?? 2) * M_TO_U * widthFactor;
+      const { verts, tris } = roadRibbon(pts, halfW);
+      if (tris === 0) continue;
+      const geo = new THREE.BufferGeometry();
+      const positions = new Float32Array(verts.length);
+      for (let i = 0; i < pts.length; i++) {
+        positions[i * 4] = verts[i * 4];           // left x
+        positions[i * 4 + 1] = y;                  // left y
+        positions[i * 4 + 2] = verts[i * 4 + 1];   // left z
+        positions[i * 4 + 3] = verts[i * 4 + 2];   // right x
+        positions[i * 4 + 4] = y;                  // right y
+        positions[i * 4 + 5] = verts[i * 4 + 3];   // right z
+      }
+      geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      const idx: number[] = [];
+      for (let i = 0; i < pts.length - 1; i++) {
+        const a = i * 2, b = i * 2 + 1;
+        idx.push(a, b, a + 2, b, b + 2, a + 2);
+      }
+      geo.setIndex(idx);
+      geo.computeVertexNormals();
+      geos.push(geo);
+    }
+    return geos;
+  };
+  const disposeList: (THREE.Material | THREE.BufferGeometry)[] = [];
+  const addPass = (geos: THREE.BufferGeometry[], color: number, roughness: number): void => {
+    if (!geos.length) return; // mergeGeometries([]) reads geometries[0].index -> TypeError
+    const merged = mergeGeometries(geos, false);
+    geos.forEach((g) => g.dispose());
+    if (!merged) return;
+    const mat = new THREE.MeshStandardMaterial({ color, roughness, metalness: 0.05 });
+    disposeList.push(merged, mat);
+    const mesh = new THREE.Mesh(merged, mat);
+    mesh.receiveShadow = true;
+    group.add(mesh);
+  };
+  addPass(buildPass(1, 0.02), CARTO.roadCasing, 0.95);                       // casing
+  const fillRes = (cls: string): number =>
+    cls === 'residential' || cls === 'service' || cls === 'unclassified'
+      ? CARTO.roadFillRes : CARTO.roadFill;
+  // fill pass split by colour class (two merges, still bounded draw calls)
+  const fillMajor: THREE.BufferGeometry[] = [], fillMinor: THREE.BufferGeometry[] = [];
   for (const road of roads) {
     const pts = road.points.map(([la, lo]) => enuUnits(origin, la, lo));
-    const halfW = (ROAD_HALF_W[road.cls] ?? 2) * M_TO_U;
+    const halfW = (ROAD_HALF_W[road.cls] ?? 2) * M_TO_U * 0.62;
     const { verts, tris } = roadRibbon(pts, halfW);
     if (tris === 0) continue;
     const geo = new THREE.BufferGeometry();
     const positions = new Float32Array(verts.length);
     for (let i = 0; i < pts.length; i++) {
-      positions[i * 4] = verts[i * 4];           // left x
-      positions[i * 4 + 1] = 0.02;               // left y
-      positions[i * 4 + 2] = verts[i * 4 + 1];   // left z
-      positions[i * 4 + 3] = verts[i * 4 + 2];   // right x
-      positions[i * 4 + 4] = 0.02;               // right y
-      positions[i * 4 + 5] = verts[i * 4 + 3];   // right z
+      positions[i * 4] = verts[i * 4];
+      positions[i * 4 + 1] = 0.022;
+      positions[i * 4 + 2] = verts[i * 4 + 1];
+      positions[i * 4 + 3] = verts[i * 4 + 2];
+      positions[i * 4 + 4] = 0.022;
+      positions[i * 4 + 5] = verts[i * 4 + 3];
     }
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     const idx: number[] = [];
@@ -290,38 +420,30 @@ function roadsGroup(origin: { lat: number; lon: number },
     }
     geo.setIndex(idx);
     geo.computeVertexNormals();
-    geos.push(geo);
+    (fillRes(road.cls) === CARTO.roadFill ? fillMajor : fillMinor).push(geo);
   }
-  const merged = mergeGeometries(geos, false);
-  geos.forEach((g) => g.dispose());
-  if (merged) {
-    const mesh = new THREE.Mesh(merged, new THREE.MeshStandardMaterial(
-      { color: 0x414b57, roughness: 0.9, metalness: 0.1 }));
-    mesh.receiveShadow = true;
-    group.add(mesh);
-  }
+  addPass(fillMajor, CARTO.roadFill, 0.85);
+  addPass(fillMinor, CARTO.roadFillRes, 0.9);
   return {
     group,
     dispose() {
-      group.children.forEach((c) => (c as THREE.Mesh).geometry.dispose());
-      group.children.forEach((c) => {
-        (c as THREE.Mesh).material && ((c as THREE.Mesh).material as THREE.Material).dispose();
-      });
+      disposeList.forEach((d) => d.dispose());
       group.clear();
     },
   };
 }
 
-/** Flat ground patches: water / wood / landuse tints (real OSM polygons). */
+/** Flat ground patches: water / wood / landuse (CARTO palette, real OSM polygons)
+ *  + a merged water shore line (Google-Maps shoreline cue). */
 function patchesGroup(origin: { lat: number; lon: number }, ctx: SceneContext):
   { group: THREE.Group; dispose: () => void } {
   const group = new THREE.Group();
-  const layers: { list: OsmPoly[] | OsmLanduse[]; color: number; y: number }[] = [
-    { list: ctx.water, color: 0x2e5f7a, y: 0.01 },
-    { list: ctx.wood, color: 0x2d4a2e, y: 0.006 },
-    { list: ctx.landuse, color: 0, y: 0.004 },
+  const disposeList: (THREE.Material | THREE.BufferGeometry)[] = [];
+  const layers: { list: OsmPoly[] | OsmLanduse[]; color: number; y: number; rough: number }[] = [
+    { list: ctx.water, color: CARTO.water, y: 0.01, rough: 0.15 },
+    { list: ctx.wood, color: CARTO.wood, y: 0.006, rough: 0.9 },
+    { list: ctx.landuse, color: 0, y: 0.004, rough: 0.95 },
   ];
-  const matCache: THREE.MeshStandardMaterial[] = [];
   for (const layer of layers) {
     if (!layer.list.length) continue;
     const geos: THREE.BufferGeometry[] = [];
@@ -332,26 +454,51 @@ function patchesGroup(origin: { lat: number; lon: number }, ctx: SceneContext):
       g.rotateX(-Math.PI / 2);
       geos.push(g);
     }
+    if (!geos.length) continue; // every ring degenerate -> empty merge would throw
     const merged = mergeGeometries(geos, false);
     geos.forEach((g) => g.dispose());
     if (!merged) continue;
     flatPoly(merged, layer.y);
+    const first = layer.list[0] as OsmLanduse;
     const color = layer.y === 0.004
-      ? LANDUSE_TINT[(layer.list[0] as OsmLanduse).kind] ?? 0x5f6b5a
+      ? (CARTO.landuse as Record<string, number>)[first.kind] ?? 0x363b42
       : layer.color;
     const mat = new THREE.MeshStandardMaterial(
-      { color, roughness: layer.y === 0.01 ? 0.15 : 0.9,
-        metalness: layer.y === 0.01 ? 0.8 : 0 });
-    matCache.push(mat);
+      { color, roughness: layer.rough, metalness: layer.y === 0.01 ? 0.8 : 0 });
+    disposeList.push(merged, mat);
     const mesh = new THREE.Mesh(merged, mat);
     mesh.receiveShadow = true;
     group.add(mesh);
   }
+  // water shore line (merged line segments — one draw call)
+  if (ctx.water.length) {
+    const shore: THREE.BufferGeometry[] = [];
+    for (const w of ctx.water) {
+      const ring = w.outline.map(([la, lo]) => enuUnits(origin, la, lo));
+      if (ring.length < 3) continue;
+      const pos: number[] = [];
+      for (let i = 0; i < ring.length - 1; i++) {
+        pos.push(ring[i].x, 0.018, ring[i].z, ring[i + 1].x, 0.018, ring[i + 1].z);
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
+      shore.push(g);
+    }
+    if (shore.length) {
+      const merged = mergeGeometries(shore, false);
+      shore.forEach((g) => g.dispose());
+      if (merged) {
+        const mat = new THREE.LineBasicMaterial({
+          color: CARTO.waterShore, transparent: true, opacity: 0.8 });
+        disposeList.push(merged, mat);
+        group.add(new THREE.LineSegments(merged, mat));
+      }
+    }
+  }
   return {
     group,
     dispose() {
-      group.children.forEach((c) => (c as THREE.Mesh).geometry.dispose());
-      matCache.forEach((m) => m.dispose());
+      disposeList.forEach((d) => d.dispose());
       group.clear();
     },
   };
@@ -381,41 +528,107 @@ export function buildLabelSprite(text: string, color = '#E8EEF5'):
   return { sprite, dispose() { tex.dispose(); mat.dispose(); } };
 }
 
-/** Scattered canopy over wood polygons (ILLUSTRATIVE — not a fuel model). */
+/** Scattered canopy over wood polygons (ILLUSTRATIVE — density disclosed in the
+ *  legend, never a fuel model). Deterministic rejection sampling inside the REAL
+ *  OSM polygon (scatterInPolygon), broadleaf blobs, cap 300/poly. */
 function woodScatter(origin: { lat: number; lon: number }, ctx: SceneContext):
   THREE.InstancedMesh | null {
   if (!ctx.wood.length) return null;
-  let n = 0;
-  for (const w of ctx.wood) n += Math.min(30, Math.floor(w.outline.length / 2));
-  n = Math.min(n, 120);
-  if (!n) return null;
-  const geo = new THREE.IcosahedronGeometry(1, 0);
-  const mat = new THREE.MeshStandardMaterial({ color: 0x27492b, roughness: 0.95 });
-  const im = new THREE.InstancedMesh(geo, mat, n);
-  let k = 0;
-  for (const w of ctx.wood) {
+  const pts: (EnuU & { s: number })[] = [];
+  ctx.wood.forEach((w, i) => {
     const ring = w.outline.map(([la, lo]) => enuUnits(origin, la, lo));
-    const x0 = Math.min(...ring.map((p) => p.x));
-    const x1 = Math.max(...ring.map((p) => p.x));
-    const z0 = Math.min(...ring.map((p) => p.z));
-    const z1 = Math.max(...ring.map((p) => p.z));
-    const want = Math.min(30, Math.floor(w.outline.length / 2));
-    for (let i = 0; i < want && k < n; i++, k++) {
-      const r = mulberry32(5000 + k);
-      const s = 0.25 + r() * 0.25;
-      const m4 = new THREE.Matrix4().compose(
-        new THREE.Vector3(x0 + r() * (x1 - x0), 0.03 + s * 0.5, z0 + r() * (z1 - z0)),
-        new THREE.Quaternion(),
-        new THREE.Vector3(s, s, s));
-      im.setMatrixAt(k, m4);
+    for (const p of scatterInPolygon(ring, 220, 11 + i)) {
+      const r = mulberry32(5000 + pts.length);
+      pts.push({ ...p, s: 0.25 + r() * 0.25 });
     }
-  }
+  });
+  if (!pts.length) return null;
+  const geo = new THREE.IcosahedronGeometry(1, 0);
+  const mat = new THREE.MeshStandardMaterial({ color: CARTO.canopy, roughness: 0.95 });
+  const im = new THREE.InstancedMesh(geo, mat, pts.length);
+  pts.forEach((p, k) => {
+    const m4 = new THREE.Matrix4().compose(
+      new THREE.Vector3(p.x, 0.03 + p.s * 0.5, p.z),
+      new THREE.Quaternion(),
+      new THREE.Vector3(p.s, p.s, p.s));
+    im.setMatrixAt(k, m4);
+  });
   im.instanceMatrix.needsUpdate = true;
   return im;
 }
 
-/** Full OSM context group. Draw calls stay bounded: merged buildings/roads/patches
- *  + instanced trees + wood scatter. Dispose frees every geometry/material. */
+/** Halo text sprite (dark stroke + light fill — readable on any backdrop). */
+export function buildHaloLabel(text: string, opts: { fill?: string; scale?: number } = {}):
+  { sprite: THREE.Sprite; dispose: () => void } {
+  const c = document.createElement('canvas');
+  c.width = 512;
+  c.height = 96;
+  const g = c.getContext('2d')!;
+  g.font = 'bold 44px "IBM Plex Mono", monospace';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.strokeStyle = CARTO.label.halo;
+  g.lineWidth = 8;
+  g.strokeText(text.slice(0, 28), 256, 48);
+  g.fillStyle = opts.fill ?? CARTO.label.fill;
+  g.fillText(text.slice(0, 28), 256, 48);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
+  const sprite = new THREE.Sprite(mat);
+  const w = opts.scale ?? 6;
+  sprite.scale.set(w, w * 0.1875, 1);
+  return { sprite, dispose() { tex.dispose(); mat.dispose(); } };
+}
+
+export interface LabelCandidate { prio: number; text: string; x: number; z: number; road?: boolean }
+
+/** Named-feature labels: priority facility → water → wood → landuse → primary
+ *  roads → other roads, capped at LABEL_CAP. Positions = centroid / midpoint. */
+export function buildOsmLabels(origin: { lat: number; lon: number },
+                               ctx: SceneContext): { sprites: THREE.Sprite[]; dispose: () => void } {
+  const cands: LabelCandidate[] = [];
+  const centroid = (ring: EnuU[]): EnuU => ({
+    x: ring.reduce((a, p) => a + p.x, 0) / ring.length,
+    z: ring.reduce((a, p) => a + p.z, 0) / ring.length,
+  });
+  for (const w of ctx.water) if (w.name) {
+    const c = centroid(w.outline.map(([la, lo]) => enuUnits(origin, la, lo)));
+    cands.push({ prio: 1, text: w.name, x: c.x, z: c.z });
+  }
+  for (const w of ctx.wood) if (w.name) {
+    const c = centroid(w.outline.map(([la, lo]) => enuUnits(origin, la, lo)));
+    cands.push({ prio: 2, text: w.name, x: c.x, z: c.z });
+  }
+  for (const w of ctx.landuse) if (w.name) {
+    const c = centroid(w.outline.map(([la, lo]) => enuUnits(origin, la, lo)));
+    cands.push({ prio: 3, text: w.name, x: c.x, z: c.z });
+  }
+  for (const r of ctx.roads) if (r.name) {
+    const pts = r.points.map(([la, lo]) => enuUnits(origin, la, lo));
+    const mid = pts[Math.floor(pts.length / 2)];
+    cands.push({ prio: 4, text: r.name, x: mid.x, z: mid.z, road: true });
+  }
+  cands.sort((a, b) => a.prio - b.prio || a.text.length - b.text.length);
+  const picked = cands.slice(0, LABEL_CAP);
+  const sprites: THREE.Sprite[] = [];
+  const disposables: { dispose: () => void }[] = [];
+  for (const c of picked) {
+    const l = buildHaloLabel(c.text, { fill: c.road ? CARTO.label.road : CARTO.label.fill,
+      scale: c.road ? 5 : 7 });
+    l.sprite.position.set(c.x, 0.09, c.z);
+    sprites.push(l.sprite);
+    disposables.push(l);
+  }
+  return {
+    sprites,
+    dispose: () => disposables.forEach((d) => d.dispose()),
+  };
+}
+
+/** Full OSM context group. Draw calls stay bounded: merged buildings/roofs/
+ *  outlines/roads/patches + instanced trees + canopy + halo labels.
+ *  Dispose frees every geometry/material/texture. */
 export function buildOsmScene(origin: { lat: number; lon: number }, ctx: SceneContext): OsmSceneResult {
   const group = new THREE.Group();
   const parts: { dispose: () => void }[] = [];
@@ -435,10 +648,14 @@ export function buildOsmScene(origin: { lat: number; lon: number }, ctx: SceneCo
       },
     });
   }
+  const labels = buildOsmLabels(origin, ctx);
+  for (const s of labels.sprites) group.add(s);
+  parts.push(labels);
   return {
     group,
     stats: { buildings: ctx.buildings.length, trees: ctx.trees.length,
-             roads: ctx.roads.length, polys: ctx.water.length + ctx.wood.length },
+             roads: ctx.roads.length, polys: ctx.water.length + ctx.wood.length,
+             meshes: group.children.length },
     dispose() {
       parts.forEach((x) => x.dispose());
       group.clear();

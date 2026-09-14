@@ -6,7 +6,9 @@ import { capByFrp, clusterEllipse, toEnu,
   type Detection } from '@/features/scene/sceneData';
 import { buildEllipseLine, buildHotspotField, buildPlume,
   disposeSharedTexture, type HotspotField } from '@/features/scene/threeBuilders';
-import { buildLabelSprite, buildOsmScene, type SceneContext } from '@/features/scene/osmScene';
+import { buildLabelSprite, buildOsmScene, buildHaloLabel,
+  pickBuilding, type BuildingPick, type SceneContext } from '@/features/scene/osmScene';
+import { CARTO } from '@/features/scene/cartography';
 
 const UNIT = 100; // 1 scene unit = 100 m
 const HAZ_HEIGHT: Record<string, number> = { 'G-III': 6, 'G-II': 4, 'G-I': 2.5 };
@@ -23,12 +25,19 @@ interface ThreeSceneProps {
   osm?: SceneContext | null;
   /** Anti-confusion callout at the top-FRP hotspot (scene units). */
   callout?: { text: string; x: number; z: number } | null;
+  /** T9 hover provenance (pure ray→ground-plane math — no pick meshes). */
+  onHover?: (pick: BuildingPick | null, cx: number, cy: number) => void;
+  /** T9 truth chip: OSM mesh count from the built group. */
+  onOsmStats?: (s: { meshes: number }) => void;
+  /** T9 scale bar / north arrow: camera distance (units) + yaw (deg), 250 ms. */
+  onCamera?: (distUnits: number, yawDeg: number) => void;
 }
 
 /** Three.js incident scene — used only where WebGL actually rasterizes.
  *  With detections: one additive sprite per FIRMS detection + 2σ ellipse +
  *  illustrative plume + replay; without: honest centroid mode. */
-export function ThreeScene({ ev, facilities, detections, replayT, osm, callout }: ThreeSceneProps) {
+export function ThreeScene({ ev, facilities, detections, replayT, osm, callout,
+  onHover, onOsmStats, onCamera }: ThreeSceneProps) {
   const mount = useRef<HTMLDivElement>(null);
   // Replay is scrubbed at high frequency — feed it to the render loop through a
   // ref so the WebGL context is never torn down for a slider drag.
@@ -47,11 +56,23 @@ export function ThreeScene({ ev, facilities, detections, replayT, osm, callout }
     const scene = new THREE.Scene();
     scene.fog = new THREE.Fog(0x0b0f14, 60, 220);
     const camera = new THREE.PerspectiveCamera(45, mount.current.clientWidth / mount.current.clientHeight, 0.1, 500);
-    scene.add(new THREE.AmbientLight(0x8ca0b3, 0.7));
-    const dir = new THREE.DirectionalLight(0xffffff, 1.1);
+    scene.add(new THREE.AmbientLight(0x8ca0b3, 0.55));
+    // T9 cartographic legibility: sky/ground bounce + stronger key light
+    scene.add(new THREE.HemisphereLight(0x33404d, 0x0d1116, 0.9));
+    const dir = new THREE.DirectionalLight(0xffffff, 1.15);
     dir.position.set(8, 14, 6);
     scene.add(dir);
-    scene.add(new THREE.GridHelper(40, 40, 0x2a3644, 0x1d2833));
+    const grid = new THREE.GridHelper(40, 40, 0x2a3644, 0x1d2833);
+    (grid.material as THREE.Material).transparent = true;
+    (grid.material as THREE.Material).opacity = CARTO.gridOpacity;
+    scene.add(grid);
+    // T9 ground: matte map-like base under the real OSM context
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(80, 80),
+      new THREE.MeshStandardMaterial({ color: CARTO.ground, roughness: 1, metalness: 0 }));
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
 
     const hasOsm = osm?.source === 'osm-overpass';
     const buildCount = osm?.buildings.length ?? 0;
@@ -102,15 +123,28 @@ export function ThreeScene({ ev, facilities, detections, replayT, osm, callout }
     let fire: THREE.Mesh | null = null;
     let osmScene: ReturnType<typeof buildOsmScene> | null = null;
     let label: ReturnType<typeof buildLabelSprite> | null = null;
+    let facLabel: ReturnType<typeof buildHaloLabel> | null = null;
     if (hasOsm && osm) {
       // REAL surroundings from OSM: footprints, trees, roads, water/land-use.
       osmScene = buildOsmScene(origin, osm);
       scene.add(osmScene.group);
+      onOsmStats?.({ meshes: osmScene.stats.meshes });
       if (callout) {
         label = buildLabelSprite(callout.text);
         label.sprite.position.set(callout.x, 1.4, callout.z);
         scene.add(label.sprite);
       }
+      // priority-0 label: the correlated facility name (real OSM-tagged context)
+      const facOsm = facilities.find((f) => f.id === ev.nearestFacilityId);
+      if (facOsm) {
+        const dxu = ((facOsm.lon - ev.lon) * 111_320 * Math.cos((ev.lat * Math.PI) / 180)) / UNIT;
+        const dzu = ((facOsm.lat - ev.lat) * 110_540) / UNIT;
+        facLabel = buildHaloLabel(facOsm.name.slice(0, 24));
+        facLabel.sprite.position.set(dxu, 0.5, -dzu);
+        scene.add(facLabel.sprite);
+      }
+    } else {
+      onOsmStats?.({ meshes: 0 });
     }
     if (dets) {
       field = buildHotspotField(origin, dets);
@@ -181,6 +215,31 @@ export function ThreeScene({ ev, facilities, detections, replayT, osm, callout }
     window.addEventListener('pointerup', onUp);
     el.addEventListener('wheel', onWheel, { passive: false });
 
+    // T9 hover provenance: ray → ground plane (y=0) → pure pickBuilding math.
+    const ray = new THREE.Raycaster();
+    const onHoverMove = (e: PointerEvent) => {
+      if (dragging) return;
+      if (!hasOsm || !osm) return onHover?.(null, 0, 0);
+      const r = el.getBoundingClientRect();
+      ray.setFromCamera(new THREE.Vector2(
+        ((e.clientX - r.left) / r.width) * 2 - 1,
+        -((e.clientY - r.top) / r.height) * 2 + 1), camera);
+      const dy = ray.ray.direction.y;
+      if (Math.abs(dy) < 1e-6) return;
+      const t = -ray.ray.origin.y / dy;
+      if (t <= 0) return onHover?.(null, 0, 0);
+      const p = ray.ray.origin.clone().addScaledVector(ray.ray.direction, t);
+      onHover?.(pickBuilding(p.x, p.z, origin, osm.buildings), e.clientX, e.clientY);
+    };
+    el.addEventListener('pointermove', onHoverMove);
+
+    // T9 scale bar + north arrow feed (250 ms — cheap trig, no per-frame churn)
+    const camTimer = window.setInterval(() => {
+      const d = Math.hypot(camera.position.x, camera.position.y - 1, camera.position.z);
+      const yaw = THREE.MathUtils.radToDeg(Math.atan2(camera.position.x, camera.position.z));
+      onCamera?.(d, yaw);
+    }, 250);
+
     let raf = 0;
     const t0 = performance.now();
     let lastMs = t0;
@@ -204,6 +263,8 @@ export function ThreeScene({ ev, facilities, detections, replayT, osm, callout }
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       el.removeEventListener('wheel', onWheel);
+      el.removeEventListener('pointermove', onHoverMove);
+      window.clearInterval(camTimer);
       field?.dispose();
       if (ellipseLine) {
         ellipseLine.geometry.dispose();
@@ -212,6 +273,11 @@ export function ThreeScene({ ev, facilities, detections, replayT, osm, callout }
       plume?.dispose();
       osmScene?.dispose();
       label?.dispose();
+      facLabel?.dispose();
+      ground.geometry.dispose();
+      (ground.material as THREE.Material).dispose();
+      grid.geometry.dispose();
+      (grid.material as THREE.Material).dispose();
       disposeSharedTexture();
       renderer.dispose();
       mount.current?.removeChild(renderer.domElement);

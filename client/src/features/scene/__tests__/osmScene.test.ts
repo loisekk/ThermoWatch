@@ -1,7 +1,8 @@
 import { expect, it } from 'vitest';
 import * as THREE from 'three';
 import { buildOsmScene, closedCCW, enuUnits, ensureCCWShapeSpace, nearestBuildingM,
-  roadRibbon, shapeFromRing, signedArea2, type OsmBuilding, type SceneContext } from '../osmScene';
+  pickBuilding, pointInPolygon, roadRibbon, scatterInPolygon, shapeFromRing, signedArea2,
+  type OsmBuilding, type SceneContext } from '../osmScene';
 
 const O = { lat: 22.8, lon: 86.2 };
 
@@ -105,6 +106,37 @@ it('nearestBuildingM: centre-to-edge of a 4-unit square = half side = 200 m', ()
 
 it('nearestBuildingM returns null for empty lists', () => {
   expect(nearestBuildingM(0, 0, O, [])).toBeNull();
+});
+
+it('pointInPolygon: inside / outside / hole-safe even-odd rule', () => {
+  const sq = [{ x: 0, z: 0 }, { x: 4, z: 0 }, { x: 4, z: 4 }, { x: 0, z: 4 }];
+  expect(pointInPolygon(2, 2, sq)).toBe(true);
+  expect(pointInPolygon(5, 5, sq)).toBe(false);
+  expect(pointInPolygon(-1, 2, sq)).toBe(false);
+});
+
+it('scatterInPolygon: density math, deterministic seed, cap honoured, all points inside', () => {
+  const sq = [{ x: 0, z: 0 }, { x: 4, z: 0 }, { x: 4, z: -4 }, { x: 0, z: -4 }]; // 400×400 m
+  const a = scatterInPolygon(sq, 220, 7);            // 0.16 km² × 220 ≈ 35
+  const b = scatterInPolygon(sq, 220, 7);
+  expect(a.length).toBeGreaterThan(20);
+  expect(a).toEqual(b);                              // same seed → same points
+  expect(a.every((p) => pointInPolygon(p.x, p.z, sq))).toBe(true);
+  expect(scatterInPolygon(sq, 1e9, 7).length).toBeLessThanOrEqual(300); // cap
+});
+
+it('pickBuilding: PIP hit at centre, ≤25 m nearest-miss, null far away', () => {
+  const b = squareBuilding(O); // ±200 m square
+  const inside = pickBuilding(0, 0, O, [b])!;
+  expect(inside.id).toBe(77);
+  expect(inside.m).toBe(0);
+  expect(inside.height_m).toBe(8);
+  // 0.2 units (20 m) east of the east edge → within the 25 m outline tolerance
+  const near = pickBuilding(2.2, 0, O, [b])!;
+  expect(near.id).toBe(77);
+  expect(near.m).toBeGreaterThan(0);
+  expect(near.m).toBeLessThanOrEqual(25);
+  expect(pickBuilding(5, 5, O, [b])).toBeNull();
 });
 
 it('buildOsmScene: stats + dispose empties the group', () => {

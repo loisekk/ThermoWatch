@@ -25,7 +25,7 @@ INSTANCES = ("https://overpass-api.de/api/interpreter",
 CACHE_TTL_S = 6 * 3600
 FRESH_LIMIT_S = 60           # min seconds between forced refreshes per cell
 DEFAULT_RADIUS_M = 1200
-CAPS = {"buildings": 600, "trees": 1500, "roads": 400, "polys": 200}
+CAPS = {"buildings": 600, "trees": 1500, "roads": 700, "polys": 300}
 QUERY_TIMEOUT_S = 60         # Overpass server-side timeout allowance
 CLIENT_TIMEOUT_S = 45.0      # per-instance network timeout (kumi can be slow)
 MAX_CHAIN_PASSES = 2         # cycle instances twice -> survives transient 429/504
@@ -96,7 +96,8 @@ def _parse(body: dict, lat: float, lon: float) -> dict:
         pts = [[g["lat"], g["lon"]] for g in geom]
         # Roads are polylines (>= 2 points); everything else is a closed ring.
         if "highway" in tags and len(pts) >= 2:
-            out["roads"].append({"points": pts, "cls": tags["highway"]})
+            out["roads"].append({"points": pts, "cls": tags["highway"],
+                                 "name": tags.get("name")})
             continue
         if not geom or len(geom) < 3:
             continue
@@ -104,13 +105,14 @@ def _parse(body: dict, lat: float, lon: float) -> dict:
             h, src = _height_m(tags, _kind(tags))
             out["buildings"].append({"id": el.get("id"), "outline": pts,
                                      "height_m": h, "height_source": src,
-                                     "kind": _kind(tags)})
+                                     "kind": _kind(tags), "name": tags.get("name")})
         elif tags.get("natural") == "water":
-            out["water"].append({"outline": pts})
+            out["water"].append({"outline": pts, "name": tags.get("name")})
         elif tags.get("natural") in ("wood", "forest") or tags.get("landuse") == "forest":
-            out["wood"].append({"outline": pts})
+            out["wood"].append({"outline": pts, "name": tags.get("name")})
         elif "landuse" in tags:
-            out["landuse"].append({"outline": pts, "kind": tags["landuse"]})
+            out["landuse"].append({"outline": pts, "kind": tags["landuse"],
+                                   "name": tags.get("name")})
     # Keep the nearest-to-incident first, then enforce caps.
     out["buildings"].sort(key=lambda b: _dist2(lat, lon, b["outline"][0]))
     out["trees"].sort(key=lambda t: _dist2(lat, lon, [t["lat"], t["lon"]]))

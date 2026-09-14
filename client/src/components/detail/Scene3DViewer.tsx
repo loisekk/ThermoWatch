@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Box as BoxIcon, X, RefreshCw } from 'lucide-react';
 import { useUIStore } from '@/store/useUIStore';
 import { useFireStore } from '@/store/useFireStore';
@@ -9,8 +9,12 @@ import { Badge } from '@/components/ui/Badge';
 import { ThreeScene } from '@/features/scene/ThreeScene';
 import { CanvasScene } from '@/features/scene/CanvasScene';
 import { capByFrp, replayWindow, type Detection } from '@/features/scene/sceneData';
-import { enuUnits, nearestBuildingM, type SceneContext } from '@/features/scene/osmScene';
+import { enuUnits, nearestBuildingM, type BuildingPick, type SceneContext } from '@/features/scene/osmScene';
+import { scaleBarMeters, LEGEND } from '@/features/scene/cartography';
 import { API_BASE } from '@/services/api/client';
+
+const CAMERA_FOV = 45;          // matches ThreeScene's PerspectiveCamera
+const CANVAS_FIXED_SCALE_M = 200; // iso canvas: fixed honest scale at default zoom
 
 function ageMin(iso: string | null): string {
   if (!iso) return '--';
@@ -77,6 +81,26 @@ export function Scene3DViewer() {
   const hasOsm = sharedCtx?.source === 'osm-overpass';
   const bld = sharedCtx?.buildings.length ?? 0;
   const treeCount = sharedCtx?.trees.length ?? 0;
+
+  // T9: hover provenance, OSM mesh-count truth chip, scale bar + north arrow.
+  const [hover, setHover] = useState<BuildingPick | null>(null);
+  const [hoverPos, setHoverPos] = useState({ x: 0, y: 0 });
+  const [cam, setCam] = useState({ dist: 26, yaw: 45 });
+  const [osmMeshes, setOsmMeshes] = useState(0);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const [bodyH, setBodyH] = useState(400);
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setBodyH(el.clientHeight || 400));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const mPerPx = (2 * cam.dist * Math.tan((CAMERA_FOV * Math.PI) / 360) * 100) / Math.max(1, bodyH);
+  const scaleM = renderer === 'webgl'
+    ? scaleBarMeters(cam.dist, CAMERA_FOV, Math.max(1, bodyH))
+    : CANVAS_FIXED_SCALE_M;
+  const scalePx = renderer === 'webgl' ? scaleM / mPerPx : 120;
   const ctxChip = ctxLoading
     ? { text: 'CONTEXT: OSM loading…', color: '#8CA0B3' }
     : !hasOsm
@@ -116,6 +140,11 @@ export function Scene3DViewer() {
             {detCount ? `hotspots: ${detCount} (viirs 375 m)` : 'per-detection unavailable — centroid mode'}
           </Badge>
           <Badge color={ctxChip.color}>{ctxChip.text}</Badge>
+          {hasOsm && (
+            <Badge color="#6b7480">
+              OSM MESHES: {osmMeshes}
+            </Badge>
+          )}
           <button
             onClick={() => useSceneContextStore.getState().bumpRefresh()}
             title="Force re-fetch OSM context (server rate-guards: min 60 s/cell)"
@@ -133,10 +162,13 @@ export function Scene3DViewer() {
             <X className="h-4 w-4" />
           </button>
         </header>
-        <div className="relative min-h-0 flex-1 bg-abyss">
+        <div ref={bodyRef} className="relative min-h-0 flex-1 bg-abyss">
           {renderer === 'webgl'
             ? <ThreeScene ev={ev} facilities={facilities} detections={shown} replayT={replayT}
-                osm={hasOsm ? sharedCtx : null} callout={callout} />
+                osm={hasOsm ? sharedCtx : null} callout={callout}
+                onHover={(pick, cx, cy) => { setHover(pick); setHoverPos({ x: cx, y: cy }); }}
+                onOsmStats={(s) => setOsmMeshes(s.meshes)}
+                onCamera={(dist, yaw) => setCam({ dist, yaw })} />
             : <CanvasScene ev={ev} facilities={facilities} detections={shown} osm={hasOsm ? sharedCtx : null} />}
           {renderer === 'webgl' && win && (
             <div className="absolute bottom-2 left-1/2 z-10 flex w-[min(520px,88%)] -translate-x-1/2 items-center gap-2 rounded-sm border border-edge bg-panel/90 px-2 py-1">
@@ -159,10 +191,40 @@ export function Scene3DViewer() {
               </button>
             </div>
           )}
+          {/* T9 overlays — legend (bottom-left), scale bar + north arrow (bottom-right) */}
+          <div className="pointer-events-none absolute bottom-3 left-3 z-10 flex flex-col gap-1 rounded-sm border border-edge bg-panel/90 px-2 py-1.5">
+            {LEGEND.map((l) => (
+              <span key={l.text} className="mono flex items-center gap-1.5 text-[9px] text-mute">
+                <i className="inline-block h-2 w-2" style={{ background: l.color }} />{l.text}
+              </span>
+            ))}
+          </div>
+          <div className="pointer-events-none absolute bottom-3 right-3 z-10 flex items-end gap-2 rounded-sm border border-edge bg-panel/90 px-2 py-1.5">
+            <div className="flex flex-col items-center">
+              <div className="relative border-b border-ink" style={{ width: `${Math.round(scalePx)}px`, height: '4px' }}>
+                <span className="absolute -bottom-0.5 left-0 h-2 w-px bg-ink" />
+                <span className="absolute -bottom-0.5 right-0 h-2 w-px bg-ink" />
+              </div>
+              <span className="mono mt-0.5 text-[9px] text-mute">{scaleM} m</span>
+            </div>
+            <span className="mono text-[9px] leading-none text-mute" style={{
+              transform: renderer === 'webgl' ? `rotate(${cam.yaw}deg)` : undefined,
+              display: 'inline-block',
+            }}>▲N</span>
+          </div>
+          {/* hover provenance tooltip (page-coords from the WebGL pointer event) */}
+          {hover && renderer === 'webgl' && (
+            <div className="mono pointer-events-none fixed z-[60] rounded-sm border border-edge bg-panel px-2 py-1 text-[10px] text-ink"
+              style={{ left: hoverPos.x + 12, top: hoverPos.y + 12 }}>
+              OSM way {hover.id} · {hover.kind}{hover.name ? ` · ${hover.name}` : ''}
+              {hover.height_m ? ` · ${hover.height_m} m (${hover.height_source})` : ''}
+              {hover.m ? ` · ≈${Math.round(hover.m)} m` : ''}
+            </div>
+          )}
         </div>
         <footer className="mono border-t border-edge px-3 py-1.5 text-[9px] uppercase tracking-widest text-dim">
           1 unit = 100 m · hotspots = firms viirs 375 m detections (near-real-time 3–6 h) · {hasOsm ? 'context = osm buildings/vegetation/roads (live snapshot · © osm odbl)' : 'context = schematic (osm unreachable)'} · drag orbit · wheel zoom · rings = 6/12/24 h spread forecast (model, not observation) · plume illustrative
-          {renderer === 'canvas2d' && ' · isometric canvas renderer (webgl rasterization unavailable here) · plume/replay off · osm simplified'}
+          {renderer === 'canvas2d' && ' · isometric canvas renderer (webgl rasterization unavailable here) · plume/replay off · osm carto'}
         </footer>
       </div>
     </div>

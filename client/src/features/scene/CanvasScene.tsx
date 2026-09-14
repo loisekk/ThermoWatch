@@ -3,15 +3,18 @@ import { CLASS_META, SUBTYPE_LABEL } from '@/config/constants';
 import type { Facility, FireEvent } from '@/types/domain';
 import { capByFrp, clusterEllipse, hotspotColor, hotspotRadius, toEnu,
   type Detection } from '@/features/scene/sceneData';
-import { enuUnits, ROAD_HALF_W, type OsmBuildingKind, type SceneContext } from '@/features/scene/osmScene';
+import { enuUnits, ROAD_HALF_W, scatterInPolygon, type OsmBuildingKind, type SceneContext } from '@/features/scene/osmScene';
+import { CARTO, LABEL_CAP, hexStr } from '@/features/scene/cartography';
 
 const UNIT = 100; // 1 scene unit = 100 m
 const HAZ_HEIGHT: Record<string, number> = { 'G-III': 6, 'G-II': 4, 'G-I': 2.5 };
 const TICK_MS = 66; // ~15 fps via setInterval — deliberately NOT requestAnimationFrame
 
 const CANVAS_KIND: Record<OsmBuildingKind, string> = {
-  industrial: '#8a9199', commercial: '#a9b2bd',
-  residential: '#cbb28a', generic: '#9d9aa0',
+  industrial: hexStr(CARTO.building.industrial),
+  commercial: hexStr(CARTO.building.commercial),
+  residential: hexStr(CARTO.building.residential),
+  generic: hexStr(CARTO.building.generic),
 };
 
 interface SceneState {
@@ -67,7 +70,7 @@ export function CanvasScene({ ev, facilities, detections, osm: osmCtx }: ScenePr
     return { pts, ell };
   }, [detections, ev.lat, ev.lon]);
 
-  // OSM parity shapes (real footprints/trees/roads/patches, simplified).
+  // OSM parity shapes (real footprints/trees/roads/patches — T9 carto grade).
   const osmShapes = useMemo(() => {
     if (osmCtx?.source !== 'osm-overpass') return null;
     const O = { lat: ev.lat, lon: ev.lon };
@@ -75,12 +78,41 @@ export function CanvasScene({ ev, facilities, detections, osm: osmCtx }: ScenePr
       const u = enuUnits(O, la, lo);
       return { x: u.x, y: -u.z };
     };
+    // labels: named water/wood/landuse centroids + road names, priority + cap 12
+    const labels: { text: string; x: number; y: number; road: boolean }[] = [];
+    const pushLabel = (name: string | null | undefined, ring: [number, number][], road: boolean): void => {
+      if (!name) return;
+      const pts = ring.map(([la, lo]) => xy(la, lo));
+      const c = road ? pts[Math.floor(pts.length / 2)]
+        : { x: pts.reduce((a, p) => a + p.x, 0) / pts.length,
+            y: pts.reduce((a, p) => a + p.y, 0) / pts.length };
+      labels.push({ text: name, x: c.x, y: c.y, road });
+    };
+    for (const w of osmCtx.water) pushLabel(w.name, w.outline, false);
+    for (const w of osmCtx.wood) pushLabel(w.name, w.outline, false);
+    for (const w of osmCtx.landuse) pushLabel(w.name, w.outline, false);
+    for (const r of osmCtx.roads) pushLabel(r.name, r.points, true);
+    labels.sort((a, b) => (a.road === b.road ? a.text.length - b.text.length : a.road ? 1 : -1));
+    // canopy: deterministic scatter inside REAL wood polygons (illustrative density)
+    const canopy: { x: number; y: number }[] = [];
+    for (const w of osmCtx.wood) {
+      const ring = w.outline.map(([la, lo]) => {
+        const u = enuUnits(O, la, lo);
+        return { x: u.x, z: u.z };
+      });
+      for (const p of scatterInPolygon(ring, 220, 11 + canopy.length)) canopy.push({ x: p.x, y: -p.z });
+    }
     return {
       water: osmCtx.water.map((w) => w.outline.map(([la, lo]) => xy(la, lo))),
       wood: osmCtx.wood.map((w) => w.outline.map(([la, lo]) => xy(la, lo))),
+      landuse: osmCtx.landuse.map((w) => ({
+        pts: w.outline.map(([la, lo]) => xy(la, lo)),
+        color: hexStr((CARTO.landuse as Record<string, number>)[w.kind] ?? 0x363b42),
+      })),
       roads: osmCtx.roads.map((r) => ({
         pts: r.points.map(([la, lo]) => xy(la, lo)),
         halfW: (ROAD_HALF_W[r.cls] ?? 2) / UNIT,
+        res: r.cls === 'residential' || r.cls === 'service' || r.cls === 'unclassified',
       })),
       buildings: osmCtx.buildings.slice(0, 80).map((b) => ({
         pts: b.outline.map(([la, lo]) => xy(la, lo)),
@@ -88,6 +120,8 @@ export function CanvasScene({ ev, facilities, detections, osm: osmCtx }: ScenePr
         color: CANVAS_KIND[b.kind],
       })),
       trees: osmCtx.trees.slice(0, 300).map((t) => xy(t.lat, t.lon)),
+      canopy,
+      labels: labels.slice(0, LABEL_CAP),
     };
   }, [osmCtx, ev.lat, ev.lon]);
 
@@ -127,7 +161,7 @@ export function CanvasScene({ ev, facilities, detections, osm: osmCtx }: ScenePr
         ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy); ctx.stroke();
       }
 
-      // OSM surroundings (simplified parity — real footprints/trees/roads/patches)
+      // OSM surroundings — T9 cartographic parity (cased roads, outlines, canopy, labels)
       if (osmShapes) {
         const fillRing = (pts: { x: number; y: number }[], z: number, color: string, alpha = 1) => {
           if (pts.length < 3) return;
@@ -141,8 +175,22 @@ export function CanvasScene({ ev, facilities, detections, osm: osmCtx }: ScenePr
           ctx.fillStyle = color; ctx.fill();
           if (alpha < 1) ctx.globalAlpha = 1;
         };
-        for (const w of osmShapes.water) fillRing(w, 0.02, '#2e5f7a');
-        for (const w of osmShapes.wood) fillRing(w, 0.015, '#2d4a2e');
+        for (const lu of osmShapes.landuse) fillRing(lu.pts, 0.004, lu.color);
+        for (const w of osmShapes.water) {
+          fillRing(w, 0.02, hexStr(CARTO.water));
+          // shoreline (1 px Google-Maps cue)
+          ctx.beginPath();
+          w.forEach((p, i) => {
+            const q = proj(p.x, p.y, 0.02);
+            if (i === 0) ctx.moveTo(q.sx, q.sy); else ctx.lineTo(q.sx, q.sy);
+          });
+          ctx.closePath();
+          ctx.strokeStyle = hexStr(CARTO.waterShore);
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
+        for (const w of osmShapes.wood) fillRing(w, 0.015, hexStr(CARTO.wood));
+        // cased roads: dark casing pass (full width) then lighter fill (×0.62)
         ctx.lineCap = 'round';
         for (const r of osmShapes.roads) {
           ctx.beginPath();
@@ -150,19 +198,55 @@ export function CanvasScene({ ev, facilities, detections, osm: osmCtx }: ScenePr
             const q = proj(p.x, p.y, 0.01);
             if (i === 0) ctx.moveTo(q.sx, q.sy); else ctx.lineTo(q.sx, q.sy);
           });
-          ctx.strokeStyle = '#3a4450';
-          ctx.lineWidth = Math.max(1, (r.halfW * 2) * s * 0.9);
+          ctx.strokeStyle = hexStr(CARTO.roadCasing);
+          ctx.lineWidth = Math.max(1.6, (r.halfW * 2) * s * 0.9);
+          ctx.stroke();
+        }
+        for (const r of osmShapes.roads) {
+          ctx.beginPath();
+          r.pts.forEach((p, i) => {
+            const q = proj(p.x, p.y, 0.012);
+            if (i === 0) ctx.moveTo(q.sx, q.sy); else ctx.lineTo(q.sx, q.sy);
+          });
+          ctx.strokeStyle = r.res ? hexStr(CARTO.roadFillRes) : hexStr(CARTO.roadFill);
+          ctx.lineWidth = Math.max(1, (r.halfW * 2 * 0.62) * s * 0.9);
           ctx.stroke();
         }
         for (const bld of osmShapes.buildings) {
-          fillRing(bld.pts, 0.005, '#0d1319', 0.7);           // ground footprint
-          fillRing(bld.pts, bld.hU, bld.color);               // top face
+          fillRing(bld.pts, 0.005, hexStr(CARTO.ground), 0.85);   // ground footprint shadow
+          fillRing(bld.pts, bld.hU, bld.color);                   // roof face
+          ctx.beginPath();
+          bld.pts.forEach((p, i) => {
+            const q = proj(p.x, p.y, bld.hU);
+            if (i === 0) ctx.moveTo(q.sx, q.sy); else ctx.lineTo(q.sx, q.sy);
+          });
+          ctx.closePath();
+          ctx.strokeStyle = hexStr(CARTO.buildingOutline);
+          ctx.globalAlpha = 0.55; ctx.lineWidth = 0.8; ctx.stroke(); ctx.globalAlpha = 1;
+        }
+        // canopy inside wood polys — ILLUSTRATIVE density (legend discloses it)
+        ctx.fillStyle = hexStr(CARTO.canopy);
+        for (const c of osmShapes.canopy) {
+          const q = proj(c.x, c.y, 0.03);
+          ctx.beginPath(); ctx.arc(q.sx, q.sy, Math.max(1, 0.028 * s), 0, 7); ctx.fill();
         }
         ctx.fillStyle = '#2c5130';
         for (const t of osmShapes.trees) {
           const q = proj(t.x, t.y, 0.03);
           ctx.beginPath(); ctx.arc(q.sx, q.sy, Math.max(1.2, 0.035 * s), 0, 7); ctx.fill();
         }
+        // halo labels (dark stroke + light fill), capped
+        ctx.font = '10px "IBM Plex Mono", monospace';
+        ctx.textAlign = 'center';
+        for (const l of osmShapes.labels) {
+          const q = proj(l.x, l.y, 0.05);
+          ctx.strokeStyle = CARTO.label.halo;
+          ctx.lineWidth = 3;
+          ctx.strokeText(l.text.slice(0, 24), q.sx, q.sy);
+          ctx.fillStyle = l.road ? CARTO.label.road : CARTO.label.fill;
+          ctx.fillText(l.text.slice(0, 24), q.sx, q.sy);
+        }
+        ctx.textAlign = 'left';
       }
 
       // per-detection hotspots — Session 23 canvas parity (dots + 2σ ellipse)

@@ -88,6 +88,35 @@ def test_caps_enforced():
     assert len(out["buildings"]) == sc.CAPS["buildings"]
 
 
+def test_name_passthrough():
+    body = {"elements": [
+        {"type": "way", "id": 2, "tags": {"building": "industrial", "name": "Tata Works"},
+         "geometry": _geom(22.8, 86.2, 0)},
+        {"type": "way", "id": 5, "tags": {"highway": "primary", "name": "NH-33"},
+         "geometry": [{"lat": 22.79, "lon": 86.19}, {"lat": 22.8, "lon": 86.2}]},
+        {"type": "way", "id": 6, "tags": {"natural": "water", "name": "Swarnarekha"},
+         "geometry": _geom(22.82, 86.22, 0)},
+    ]}
+    out = sc._parse(body, 22.8, 86.2)
+    assert out["buildings"][0]["name"] == "Tata Works"
+    assert out["roads"][0]["name"] == "NH-33"
+    assert out["water"][0]["name"] == "Swarnarekha"
+    # nameless features stay backward-compatible (None, client treats as undefined)
+    out2 = sc._parse(_ctx_body(), 22.8, 86.2)
+    assert out2["roads"][0]["name"] is None
+
+
+def test_caps_roads_and_polys():
+    roads = [{"type": "way", "id": 900 + i, "tags": {"highway": "service"},
+              "geometry": [{"lat": 22.8, "lon": 86.2}, {"lat": 22.8, "lon": 86.21}]}
+             for i in range(750)]
+    polys = [{"type": "way", "id": 2000 + i, "tags": {"landuse": "farmland"},
+              "geometry": _geom(22.7, 86.1, i, 0.0005)}
+             for i in range(350)]
+    out = sc._parse({"elements": roads + polys}, 22.8, 86.2)
+    assert len(out["roads"]) == 700 and len(out["landuse"]) == 300
+
+
 def test_cache_and_single_fetch():
     sc.reset_cache()
     calls = {"n": 0}

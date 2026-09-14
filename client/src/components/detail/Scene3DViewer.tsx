@@ -11,7 +11,7 @@ import { CanvasScene } from '@/features/scene/CanvasScene';
 import { capByFrp, replayWindow, type Detection } from '@/features/scene/sceneData';
 import { enuUnits, nearestBuildingM, type BuildingPick, type SceneContext } from '@/features/scene/osmScene';
 import { scaleBarMeters, LEGEND } from '@/features/scene/cartography';
-import { resolveSceneRenderer } from '@/features/scene/glSelfCheck';
+import { resolveSceneRenderer, type GLDiag } from '@/features/scene/glSelfCheck';
 import { API_BASE } from '@/services/api/client';
 
 const CAMERA_FOV = 45;          // matches ThreeScene's PerspectiveCamera
@@ -42,11 +42,16 @@ export function Scene3DViewer() {
   const events = useFireStore((s) => s.events);
   const facilities = useFireStore((s) => s.facilities);
   const capability = useMapDiagStore((s) => s.capability);
-  const [sceneRenderer, setSceneRenderer] = useState<'canvas2d' | 'gl'>('canvas2d');
-  // T10 GL pin ladder: first GL death = one silent remount; second = permanent
-  // honest pin (chip says why). sceneError = the local boundary caught a throw.
-  const [glAttempts, setGlAttempts] = useState(0);
-  const [pin, setPin] = useState<string | null>(null);
+  const glPin = useMapDiagStore((s) => s.glPin);
+  const setGlPin = useMapDiagStore((s) => s.setGlPin);
+  // T15: forceGl is the explicit opt-in; retryArmed is the ONE-SHOT that lets a
+  // forced attempt past the persisted pin — consumed by the frame-2 self-check
+  // (pass clears the pin, any death re-pins). retrySeq forces a fresh context.
+  const [forceGl, setForceGl] = useState(false);
+  const [retryArmed, setRetryArmed] = useState(false);
+  const [retrySeq, setRetrySeq] = useState(0);
+  const [diag, setDiag] = useState<GLDiag | null>(null);
+  const [diagOpen, setDiagOpen] = useState(false);
   const [sceneError, setSceneError] = useState(false);
   // Per-detection buffer for the selected event (null = fetch failed/unavailable
   // → honest centroid-mode fallback, never a black scene).
@@ -55,13 +60,17 @@ export function Scene3DViewer() {
   const [replayT, setReplayT] = useState<number | null>(null);
   const ev = events.find((e) => e.id === sceneEventId) ?? null;
 
-  // T10 pin ladder: first GL death gets ONE remount attempt (fresh context),
-  // the second death pins the dialog to Canvas2D with the reason on the chip.
+  // T15 pin semantics: ANY death re-pins persistently (survives reload); FORCE
+  // arms a one-shot retry whose pin-clear only lands after frame-2 passes.
   const onGlDead = (reason: string) => {
-    if (glAttempts < 1) setGlAttempts((a) => a + 1);
-    else setPin(reason);
+    setGlPin(reason);
+    setRetryArmed(false);
   };
-  useEffect(() => { setSceneError(false); }, [sceneEventId, glAttempts]);
+  const onGlAlive = () => {
+    setGlPin(null);
+    setRetryArmed(false);
+  };
+  useEffect(() => { setSceneError(false); }, [sceneEventId, retrySeq]);
 
   useEffect(() => {
     let on = true;
@@ -97,13 +106,13 @@ export function Scene3DViewer() {
 
   // Spot checks below must ALL run as hooks every render, so the early return
   // for a missing event sits AFTER them (null-safe when ev is undefined).
-  // T10 doctrine restore: canvas-first. GL only when the user forced it AND the
-  // probe proves rasterization AND the pin ladder has not retired GL here.
+  // T15 resolution order: persisted pin → force-one-shot → capability. Canvas-first.
   const renderer: 'webgl' | 'canvas2d' =
     !sceneError && resolveSceneRenderer({
-      forced: sceneRenderer === 'gl',
-      rasterizes: capability?.rasterizes,
-      pinned: pin !== null,
+      cap: capability,
+      forceGl,
+      pin: glPin,
+      retryArmed,
     }) === 'webgl' ? 'webgl' : 'canvas2d';
   const shown = dets ? capByFrp(dets) : null;
   const win = shown && shown.length ? replayWindow(shown) : null;
@@ -167,9 +176,9 @@ export function Scene3DViewer() {
           <Badge color={CLASS_META[ev.classification.primary].color}>{CLASS_META[ev.classification.primary].label}</Badge>
           <Badge color={RISK_META[ev.risk.level].color}>risk {ev.risk.score}</Badge>
           <Badge color="#8ca0b3">renderer: {renderer}</Badge>
-          {pin && (
+          {glPin.pinned && (
             <Badge color="#FFB800">
-              GL RASTER UNRELIABLE HERE ({pin}) — PINNED TO CANVAS2D · force to retry
+              GL RASTER UNRELIABLE HERE ({glPin.reason}) — PINNED TO CANVAS2D · force to retry
             </Badge>
           )}
           {sceneError && (
@@ -193,26 +202,33 @@ export function Scene3DViewer() {
           </button>
           <button
             onClick={() => {
-              setPin(null); setGlAttempts(0); setSceneError(false);
-              setSceneRenderer(sceneRenderer === 'gl' ? 'canvas2d' : 'gl');
+              if (forceGl) { setForceGl(false); setRetryArmed(false); }
+              else { setForceGl(true); setRetryArmed(true); setRetrySeq((s) => s + 1); setSceneError(false); }
             }}
             className="mono rounded-sm border border-edge px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-mute hover:text-ink"
           >
-            {sceneRenderer === 'gl' ? 'force canvas' : 'try GL'}
+            {forceGl ? 'force canvas' : 'try GL'}
+          </button>
+          <button
+            onClick={() => setDiagOpen((o) => !o)}
+            title="GL diagnostics: context, attributes, driver, frames, variance, draw calls"
+            className="mono rounded-sm border border-edge px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-mute hover:text-ink"
+          >
+            gl diag
           </button>
           <button onClick={() => setSceneEventId(null)} aria-label="Close 3D scene" className="ml-auto rounded p-1 text-mute hover:text-ink">
             <X className="h-4 w-4" />
           </button>
         </header>
-        <div ref={bodyRef} className="relative min-h-0 flex-1 bg-abyss">
+        <div ref={bodyRef} className="relative min-h-0 flex-1 bg-abyss" style={{ background: '#0d1116' }}>
           {renderer === 'webgl' ? (
-            <SceneErrorBoundary key={glAttempts} onError={() => setSceneError(true)}>
+            <SceneErrorBoundary key={retrySeq} onError={() => setSceneError(true)}>
               <ThreeScene ev={ev} facilities={facilities} detections={shown} replayT={replayT}
                 osm={hasOsm ? sharedCtx : null} callout={callout}
                 onHover={(pick, cx, cy) => { setHover(pick); setHoverPos({ x: cx, y: cy }); }}
                 onOsmStats={(s) => setOsmMeshes(s.meshes)}
                 onCamera={(dist, yaw) => setCam({ dist, yaw })}
-                onGlDead={onGlDead} />
+                onGlDead={onGlDead} onGlAlive={onGlAlive} onGlDiag={setDiag} />
             </SceneErrorBoundary>
           ) : (
             <CanvasScene ev={ev} facilities={facilities} detections={shown} osm={hasOsm ? sharedCtx : null} />
@@ -255,7 +271,7 @@ export function Scene3DViewer() {
               <span className="mono mt-0.5 text-[9px] text-mute">{scaleM} m</span>
             </div>
             <span className="mono flex items-end gap-1 text-[9px] leading-none text-mute">
-              {/* T10: inline SVG only — no <img> assets inside the scene dialog */}
+              {/* T10/T15: inline SVG only — bitmap img assets are banned inside the scene dialog */}
               <svg width="10" height="8" viewBox="0 0 10 8" aria-hidden="true" style={{
                 transform: renderer === 'webgl' ? `rotate(${cam.yaw}deg)` : undefined,
               }}>
@@ -264,6 +280,25 @@ export function Scene3DViewer() {
               <span>N</span>
             </span>
           </div>
+          {/* T15 GL DIAG strip — context/attributes/driver/frames/variance/calls */}
+          {diagOpen && (
+            <div className="absolute right-3 top-3 z-20 w-[min(440px,86%)] rounded-sm border border-edge bg-panel/95 p-2">
+              <div className="mono mb-1 flex items-center justify-between text-[9px] uppercase tracking-widest text-dim">
+                <span>gl diagnostics</span>
+                <button
+                  onClick={() => { if (diag) void navigator.clipboard?.writeText(JSON.stringify({ ...diag, pin: glPin }, null, 2)); }}
+                  className="mono rounded-sm border border-edge px-1.5 py-0.5 text-[9px] text-mute hover:text-ink"
+                >
+                  copy report
+                </button>
+              </div>
+              {diag ? (
+                <pre className="mono max-h-48 overflow-auto whitespace-pre-wrap text-[9px] leading-relaxed text-mute">{JSON.stringify({ ...diag, pin: glPin }, null, 2)}</pre>
+              ) : (
+                <div className="mono text-[9px] text-mute">no GL context this session — canvas renderer active</div>
+              )}
+            </div>
+          )}
           {/* hover provenance tooltip (page-coords from the WebGL pointer event) */}
           {hover && renderer === 'webgl' && (
             <div className="mono pointer-events-none fixed z-[60] rounded-sm border border-edge bg-panel px-2 py-1 text-[10px] text-ink"
@@ -276,8 +311,8 @@ export function Scene3DViewer() {
         </div>
         <footer className="mono border-t border-edge px-3 py-1.5 text-[9px] uppercase tracking-widest text-dim">
           1 unit = 100 m · hotspots = firms viirs 375 m detections (near-real-time 3–6 h) · {hasOsm ? 'context = osm buildings/vegetation/roads (live snapshot · © osm odbl)' : 'context = schematic (osm unreachable)'} · drag orbit · wheel zoom · rings = 6/12/24 h spread forecast (model, not observation) · plume illustrative
-          {renderer === 'canvas2d' && ` · ${pin
-            ? `gl pinned on this host (${pin})`
+          {renderer === 'canvas2d' && ` · ${glPin.pinned
+            ? `gl pinned on this host (${glPin.reason})`
             : sceneError
               ? 'scene error — canvas fallback'
               : 'isometric canvas renderer (webgl rasterization unavailable here)'} · plume/replay off · osm carto`}

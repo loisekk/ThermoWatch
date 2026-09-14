@@ -25,20 +25,45 @@ describe('pixelVariance', () => {
   });
 });
 
-describe('resolveSceneRenderer (doctrine: canvas-first)', () => {
-  it('forced + healthy probe -> webgl', () => {
-    expect(resolveSceneRenderer({ forced: true, rasterizes: true, pinned: false })).toBe('webgl');
+describe('resolveSceneRenderer (T15 order: persisted pin → force-one-shot → capability)', () => {
+  const PIN = { pinned: true, reason: 'uniform raster', at: 1 };
+  const OK = { pinned: false, reason: null, at: null };
+
+  it('persisted pin standing -> canvas (even forced + healthy)', () => {
+    expect(resolveSceneRenderer({ cap: { rasterizes: true }, forceGl: true, pin: PIN, retryArmed: false })).toBe('canvas');
   });
-  it('forced + broken probe -> canvas2d', () => {
-    expect(resolveSceneRenderer({ forced: true, rasterizes: false, pinned: false })).toBe('canvas2d');
+  it('persisted pin + retry armed + forced + healthy -> webgl (one-shot)', () => {
+    expect(resolveSceneRenderer({ cap: { rasterizes: true }, forceGl: true, pin: PIN, retryArmed: true })).toBe('webgl');
   });
-  it('forced + missing probe verdict -> canvas2d (context creation alone lies)', () => {
-    expect(resolveSceneRenderer({ forced: true, rasterizes: undefined, pinned: false })).toBe('canvas2d');
+  it('persisted pin + retry armed + broken probe -> canvas (probe still gates)', () => {
+    expect(resolveSceneRenderer({ cap: { rasterizes: false }, forceGl: true, pin: PIN, retryArmed: true })).toBe('canvas');
   });
-  it('default (not forced) -> canvas2d even with a healthy probe', () => {
-    expect(resolveSceneRenderer({ forced: false, rasterizes: true, pinned: false })).toBe('canvas2d');
+  it('no pin + forced + healthy -> webgl', () => {
+    expect(resolveSceneRenderer({ cap: { rasterizes: true }, forceGl: true, pin: OK, retryArmed: false })).toBe('webgl');
   });
-  it('pinned host -> canvas2d even when forced and healthy', () => {
-    expect(resolveSceneRenderer({ forced: true, rasterizes: true, pinned: true })).toBe('canvas2d');
+  it('no pin + forced + broken -> canvas (context creation alone lies)', () => {
+    expect(resolveSceneRenderer({ cap: { rasterizes: false }, forceGl: true, pin: OK, retryArmed: false })).toBe('canvas');
+  });
+  it('no pin + missing verdict + forced -> canvas', () => {
+    expect(resolveSceneRenderer({ cap: null, forceGl: true, pin: OK, retryArmed: false })).toBe('canvas');
+  });
+  it('default (not forced) -> canvas even with a healthy probe', () => {
+    expect(resolveSceneRenderer({ cap: { rasterizes: true }, forceGl: false, pin: OK, retryArmed: false })).toBe('canvas');
+  });
+});
+
+describe('shouldRenderSize (T15 layout-safe mount gate)', () => {
+  it('rejects zero/near-zero and non-finite sizes', () => {
+    expect(shouldRenderSize(0, 400)).toBe(false);
+    expect(shouldRenderSize(400, 0)).toBe(false);
+    expect(shouldRenderSize(9.9, 400)).toBe(false);
+    expect(shouldRenderSize(400, 5)).toBe(false);
+    expect(shouldRenderSize(Number.NaN, 400)).toBe(false);
+    expect(shouldRenderSize(400, Number.POSITIVE_INFINITY)).toBe(false);
+    expect(shouldRenderSize(-10, 400)).toBe(false);
+  });
+  it('accepts real sizes', () => {
+    expect(shouldRenderSize(10, 10)).toBe(true);
+    expect(shouldRenderSize(880, 600)).toBe(true);
   });
 });

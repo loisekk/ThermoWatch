@@ -9,7 +9,7 @@ import { buildEllipseLine, buildHotspotField, buildPlume,
 import { buildLabelSprite, buildOsmScene, buildHaloLabel,
   pickBuilding, type BuildingPick, type SceneContext } from '@/features/scene/osmScene';
 import { CARTO } from '@/features/scene/cartography';
-import { pixelVariance, UNIFORM_RASTER_VARIANCE } from './glSelfCheck';
+import { pixelVariance, shouldRenderSize, UNIFORM_RASTER_VARIANCE, type GLDiag } from './glSelfCheck';
 
 const UNIT = 100; // 1 scene unit = 100 m
 const HAZ_HEIGHT: Record<string, number> = { 'G-III': 6, 'G-II': 4, 'G-I': 2.5 };
@@ -34,13 +34,17 @@ interface ThreeSceneProps {
   onCamera?: (distUnits: number, yawDeg: number) => void;
   /** T10 GL rescue ladder: uniform raster / context lost / frozen frames. */
   onGlDead?: (reason: string) => void;
+  /** T15: frame-2 self-check PASSED — the shell may clear the persisted pin. */
+  onGlAlive?: () => void;
+  /** T15 GL DIAG feed (throttled 250 ms). */
+  onGlDiag?: (d: GLDiag) => void;
 }
 
 /** Three.js incident scene — used only where WebGL actually rasterizes.
  *  With detections: one additive sprite per FIRMS detection + 2σ ellipse +
  *  illustrative plume + replay; without: honest centroid mode. */
 export function ThreeScene({ ev, facilities, detections, replayT, osm, callout,
-  onHover, onOsmStats, onCamera, onGlDead }: ThreeSceneProps) {
+  onHover, onOsmStats, onCamera, onGlDead, onGlAlive, onGlDiag }: ThreeSceneProps) {
   const mount = useRef<HTMLDivElement>(null);
   // Replay is scrubbed at high frequency — feed it to the render loop through a
   // ref so the WebGL context is never torn down for a slider drag.
@@ -49,11 +53,20 @@ export function ThreeScene({ ev, facilities, detections, replayT, osm, callout,
 
   useEffect(() => {
     if (!mount.current) return;
-    // T10: opaque canvas with a ground-coloured clear — the white/uninitialised
-    // paint is banned outright; a lost context can only ever show the ground tone.
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    // T15: the renderer OWNS its context (an externally-supplied one can drop
+    // attributes) and the paint ban holds at three layers — opaque alpha:false +
+    // clear-alpha 1 + dark CSS on canvas element / dialog body / dialog panel.
+    // A never-presented frame can therefore only ever read as dark ground.
+    const canvas = document.createElement('canvas');
+    canvas.style.display = 'block';
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+    canvas.style.background = `#${CARTO.ground.toString(16).padStart(6, '0')}`; // paint-ban layer 1
+    const renderer = new THREE.WebGLRenderer({
+      canvas, alpha: false, antialias: true,
+      powerPreference: 'high-performance', preserveDrawingBuffer: false,
+    });
     renderer.setPixelRatio(Math.min(2, devicePixelRatio));
-    renderer.setSize(mount.current.clientWidth, mount.current.clientHeight);
     renderer.setClearColor(new THREE.Color(CARTO.ground), 1);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -70,6 +83,35 @@ export function ThreeScene({ ev, facilities, detections, replayT, osm, callout,
     const scene = new THREE.Scene();
     scene.fog = new THREE.Fog(0x0b0f14, 60, 220);
     const camera = new THREE.PerspectiveCamera(45, mount.current.clientWidth / mount.current.clientHeight, 0.1, 500);
+
+    // T15 layout-safe size loop: RO flags + throttled rect compare (250 ms). A
+    // zero-size mount (dialog transition, hidden tab) never reaches setSize, and
+    // >2 s of it pins the dialog to canvas — never a 0×0 buffer that presents
+    // nothing forever.
+    const container = mount.current;
+    let lastW = 0;
+    let lastH = 0;
+    let sizeDirty = true;
+    let lastSizeCheckMs = 0;
+    let zeroSinceMs = 0;
+    const syncSize = (nowMs: number): boolean => {
+      if (!sizeDirty && nowMs - lastSizeCheckMs < 250) return true;
+      sizeDirty = false;
+      lastSizeCheckMs = nowMs;
+      const r = container.getBoundingClientRect();
+      if (!shouldRenderSize(r.width, r.height)) return false;
+      if (r.width !== lastW || r.height !== lastH) {
+        renderer.setSize(r.width, r.height, false); // CSS owns layout
+        camera.aspect = r.width / r.height;
+        camera.updateProjectionMatrix();
+        lastW = r.width;
+        lastH = r.height;
+      }
+      return true;
+    };
+    const sizeRO = new ResizeObserver(() => { sizeDirty = true; });
+    sizeRO.observe(container);
+
     scene.add(new THREE.AmbientLight(0x8ca0b3, 0.55));
     // T9 cartographic legibility: sky/ground bounce + stronger key light
     scene.add(new THREE.HemisphereLight(0x33404d, 0x0d1116, 0.9));
@@ -252,6 +294,31 @@ export function ThreeScene({ ev, facilities, detections, replayT, osm, callout,
       const d = Math.hypot(camera.position.x, camera.position.y - 1, camera.position.z);
       const yaw = THREE.MathUtils.radToDeg(Math.atan2(camera.position.x, camera.position.z));
       onCamera?.(d, yaw);
+      // T15 GL DIAG feed — degradation-tolerant renderer/driver strings.
+      if (onGlDiag) {
+        const gl = renderer.getContext();
+        let rendererStr = String(gl.getParameter(gl.RENDERER) ?? 'unknown');
+        let vendorStr = String(gl.getParameter(gl.VENDOR) ?? 'unknown');
+        const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+        if (dbg) {
+          rendererStr = String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) ?? rendererStr);
+          vendorStr = String(gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) ?? vendorStr);
+        }
+        const attrs = gl.getContextAttributes();
+        onGlDiag({
+          contextType: renderer.capabilities.isWebGL2 ? 'WebGL2' : 'WebGL1',
+          attributes: attrs ? Object.entries(attrs).map(([k, v]) => `${k}=${v}`).join(' ') : 'n/a',
+          renderer: rendererStr,
+          vendor: vendorStr,
+          backingW: gl.drawingBufferWidth,
+          backingH: gl.drawingBufferHeight,
+          pixelRatio: renderer.getPixelRatio(),
+          frames,
+          lastVariance,
+          drawCalls: renderer.info.render.calls,
+          triangles: renderer.info.render.triangles,
+        });
+      }
     }, 250);
 
     let raf = 0;
@@ -259,10 +326,19 @@ export function ThreeScene({ ev, facilities, detections, replayT, osm, callout,
     let lastMs = t0;
     let frames = 0;
     let rasterChecked = false;
+    let lastVariance: number | null = null;
     const loop = () => {
       const nowMs = performance.now();
       const dt = Math.min(0.1, (nowMs - lastMs) / 1000);
       lastMs = nowMs;
+      // T15: never render into a zero-size buffer — pin after 2 s of it.
+      if (!syncSize(nowMs)) {
+        if (zeroSinceMs === 0) zeroSinceMs = nowMs;
+        if (nowMs - zeroSinceMs > 2000) die('zero-size raster');
+        raf = requestAnimationFrame(loop);
+        return;
+      }
+      zeroSinceMs = 0;
       if (fire) fire.scale.setScalar(1 + 0.18 * Math.sin(((nowMs - t0) / 1000) * 4));
       field?.setReplay(replayRef.current);
       field?.update(nowMs);
@@ -281,7 +357,9 @@ export function ThreeScene({ ev, facilities, detections, replayT, osm, callout,
           const h = gl.drawingBufferHeight;
           const px = new Uint8Array(32 * 32 * 4);
           gl.readPixels(((w / 2) | 0) - 16, ((h / 2) | 0) - 16, 32, 32, gl.RGBA, gl.UNSIGNED_BYTE, px);
-          if (pixelVariance(px) < UNIFORM_RASTER_VARIANCE) die('uniform raster');
+          lastVariance = pixelVariance(px);
+          if (lastVariance < UNIFORM_RASTER_VARIANCE) die('uniform raster');
+          else onGlAlive?.(); // T15: frame-2 passed — the shell may clear the persisted pin
         } catch {
           die('raster read failed');
         }
@@ -314,6 +392,7 @@ export function ThreeScene({ ev, facilities, detections, replayT, osm, callout,
       renderer.domElement.removeEventListener('webglcontextlost', onContextLost);
       window.clearInterval(camTimer);
       window.clearInterval(watchdog);
+      sizeRO.disconnect();
       field?.dispose();
       if (ellipseLine) {
         ellipseLine.geometry.dispose();

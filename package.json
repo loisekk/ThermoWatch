@@ -12,7 +12,8 @@
     "test:api": "cd server/api && .venv\\Scripts\\python.exe -m pytest -q",
     "test:client": "cd client && npm run test",
     "test:claims": "python scripts/claim_audit.py",
-    "test": "npm run test:api && npm run test:client && npm run test:claims",
+    "test:scenesurface": "node scripts/no_img_scene.mjs",
+    "test": "npm run test:api && npm run test:client && npm run test:claims && npm run test:scenesurface",
     "typecheck": "npm --prefix client run typecheck && cd server/ingest && bun run typecheck"
   }
 }

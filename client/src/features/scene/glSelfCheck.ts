@@ -21,19 +21,49 @@ export function pixelVariance(px: Uint8Array): number {
 /** A real scene frame varies far above this; a wedged context reads uniform. */
 export const UNIFORM_RASTER_VARIANCE = 1e-3;
 
-export type SceneRenderer = 'webgl' | 'canvas2d';
+export type SceneRenderer = 'webgl' | 'canvas';
+
+/** Persisted GL pin (tw.glPin.v1) — survives reload, so a host whose presenter
+ *  paints white/black can never silently re-arm the broken context. */
+export interface GLPin { pinned: boolean; reason: string | null; at: number | null }
+export const GL_PIN_OK: GLPin = { pinned: false, reason: null, at: null };
 
 export interface SceneRendererOpts {
+  /** probe verdict: capability (context creation alone lies) */
+  cap: { rasterizes?: boolean } | null | undefined;
   /** user pressed "try GL" */
-  forced: boolean;
-  /** probe verdict: capability?.rasterizes (context creation alone lies) */
-  rasterizes: boolean | undefined;
-  /** the pin ladder retired GL on this host */
-  pinned: boolean;
+  forceGl: boolean;
+  /** persisted pin (tw.glPin.v1) */
+  pin: GLPin;
+  /** one-shot retry armed by FORCE — consumes the pin only if frame-2 passes */
+  retryArmed: boolean;
 }
 
-/** Canvas-first routing: GL only when forced AND the probe proves rasterization
- *  AND the pin ladder has not retired GL. Everything else -> Canvas2D. */
-export function resolveSceneRenderer(o: SceneRendererOpts): SceneRenderer {
-  return o.forced && o.rasterizes === true && !o.pinned ? 'webgl' : 'canvas2d';
+/** T15 resolution order: persisted pin → force-one-shot → capability.
+ *  Canvas-first: GL only when the user explicitly forced it AND the probe proved
+ *  rasterization AND the pin is not standing (or a one-shot retry is armed). */
+export function resolveSceneRenderer(o: SceneRendererOpts): 'webgl' | 'canvas' {
+  if (o.pin.pinned && !o.retryArmed) return 'canvas';
+  if (o.forceGl && o.cap?.rasterizes === true) return 'webgl';
+  return 'canvas';
+}
+
+/** Layout-safe mount gate: a zero-size container (dialog transition, hidden tab)
+ *  must never reach renderer.setSize — a 0×0 buffer presents nothing forever. */
+export const shouldRenderSize = (w: number, h: number): boolean =>
+  Number.isFinite(w) && Number.isFinite(h) && w >= 10 && h >= 10;
+
+/** T15 GL DIAG payload (scene-dialog diagnostic strip + copy report). */
+export interface GLDiag {
+  contextType: string;
+  attributes: string;
+  renderer: string;
+  vendor: string;
+  backingW: number;
+  backingH: number;
+  pixelRatio: number;
+  frames: number;
+  lastVariance: number | null;
+  drawCalls: number;
+  triangles: number;
 }

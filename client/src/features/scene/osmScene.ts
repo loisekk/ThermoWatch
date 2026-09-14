@@ -151,12 +151,26 @@ const LANDUSE_TINT: Record<string, number> = {
   residential: 0x6d6456, orchard: 0x5f7d4a,
 };
 
-function shapeFromRing(ring: EnuU[]): THREE.Shape {
+/** Ring (scene units, x/z, north = −z) → THREE.Shape in SHAPE space (x, −z).
+ *  Winding is corrected IN SHAPE SPACE — the frame ExtrudeGeometry/ShapeGeometry
+ *  actually consume after the rotateX(-π/2) mount (T9.0 hotfix: buildings were
+ *  backface-culled invisible in WebGL because winding was corrected in (x,z),
+ *  then the (x,−z) sign flip reversed orientation again). Exported for tests. */
+export function shapeFromRing(ring: EnuU[]): THREE.Shape {
+  const m = ensureCCWShapeSpace(ring);
   const s = new THREE.Shape();
-  s.moveTo(ring[0].x, ring[0].z);
-  for (let i = 1; i < ring.length; i++) s.lineTo(ring[i].x, ring[i].z);
+  m.forEach((p, i) => (i ? s.lineTo(p.x, p.y) : s.moveTo(p.x, p.y)));
   s.closePath();
   return s;
+}
+
+/** Winding corrected in SHAPE space (x, y = −z). Positive output shoelace
+ *  guarantees ExtrudeGeometry top caps face +Y (visible from above, FrontSide). */
+export function ensureCCWShapeSpace(pts: EnuU[]): { x: number; y: number }[] {
+  const m = pts.map((p) => ({ x: p.x, y: -p.z }));
+  let s = 0;
+  for (let i = 0; i < m.length - 1; i++) s += m[i].x * m[i + 1].y - m[i + 1].x * m[i].y;
+  return s < 0 ? m.reverse() : m;
 }
 
 /** REAL OSM footprint rings extruded to true/estimated height, merged per kind. */

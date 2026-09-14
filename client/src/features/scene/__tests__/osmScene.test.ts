@@ -1,8 +1,53 @@
 import { expect, it } from 'vitest';
-import { buildOsmScene, closedCCW, enuUnits, nearestBuildingM, roadRibbon,
-  signedArea2, type OsmBuilding, type SceneContext } from '../osmScene';
+import * as THREE from 'three';
+import { buildOsmScene, closedCCW, enuUnits, ensureCCWShapeSpace, nearestBuildingM,
+  roadRibbon, shapeFromRing, signedArea2, type OsmBuilding, type SceneContext } from '../osmScene';
 
 const O = { lat: 22.8, lon: 86.2 };
+
+/** Shoelace in shape space (x, y). */
+function shoelaceXY(pts: { x: number; y: number }[]): number {
+  let s = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i + 1) % pts.length];
+    s += a.x * b.y - b.x * a.y;
+  }
+  return s / 2;
+}
+
+it('ensureCCWShapeSpace: CW (x,z) square -> positive shoelace in (x,y); mapping is (x, -z)', () => {
+  // CW in (x,z) as written (signedArea2 < 0): west->south->east->north
+  const cw = [{ x: 0, z: 0 }, { x: 0, z: 2 }, { x: 2, z: 2 }, { x: 2, z: 0 }];
+  expect(signedArea2(cw)).toBeLessThan(0);
+  const m = ensureCCWShapeSpace(cw);
+  expect(shoelaceXY(m)).toBeGreaterThan(0);          // corrected in SHAPE space
+  expect(m.every((p, i) => p.x === cw[i].x && p.y === -cw[i].z)).toBe(true); // (x, -z) mapping
+  // CCW (x,z) input stays positive after the (x,-z) flip correction
+  const ccw = ensureCCWShapeSpace(cw.slice().reverse());
+  expect(shoelaceXY(ccw)).toBeGreaterThan(0);
+});
+
+it('extruded footprints: top-cap normals point +Y after the rotateX(-PI/2) mount (T9.0 GL fix)', () => {
+  const ring = closedCCW([{ x: 0, z: 0 }, { x: 4, z: 0 }, { x: 4, z: -4 }, { x: 0, z: -4 }]);
+  const geo = new THREE.ExtrudeGeometry(shapeFromRing(ring), { depth: 1, bevelEnabled: false });
+  geo.rotateX(-Math.PI / 2);
+  geo.computeVertexNormals();
+  const pos = geo.getAttribute('position') as THREE.BufferAttribute;
+  const nor = geo.getAttribute('normal') as THREE.BufferAttribute;
+  let maxY = -Infinity;
+  for (let i = 0; i < pos.count; i++) maxY = Math.max(maxY, pos.getY(i));
+  let topTris = 0, upTris = 0;
+  for (let t = 0; t < pos.count; t += 3) {
+    const ys = [0, 1, 2].map((k) => pos.getY(t + k));
+    if (ys.every((y) => Math.abs(y - maxY) < 1e-6)) {
+      topTris++;
+      const ny = (nor.getY(t) + nor.getY(t + 1) + nor.getY(t + 2)) / 3;
+      if (ny > 0.5) upTris++;
+    }
+  }
+  expect(topTris).toBeGreaterThan(0);
+  expect(upTris).toBe(topTris); // every roof triangle faces UP -> visible with FrontSide
+});
 
 it('enuUnits: north maps to negative z, east to +x (~11.13 units / 0.01 deg)', () => {
   const n = enuUnits(O, O.lat + 0.01, O.lon);

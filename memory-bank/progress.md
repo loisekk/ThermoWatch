@@ -1,6 +1,6 @@
 # Progress
 
-> Status as of 2026-09-14. Source of truth for what works, what's left, and how decisions evolved.
+> Status as of 2026-09-15. Source of truth for what works, what's left, and how decisions evolved.
 
 ## What Works (feature-complete console)
 ### Session 23 — LIVE WIRE, detection buffer, Scene 2.0, resizable panels
@@ -69,8 +69,21 @@
 - **T13 (`a53b8d2`):** `openScene/closeScene` on useUIStore; `V` shortcut (isTypingTarget
   guarded, opens selected event's scene); dossier header `3D scene · V` action;
   `&scene=<eventId>` deep link (dialog opens when the event hits the feed).
-- Gates: pytest 44 · vitest 24 files / 108 tests · tsc 0 · claim_audit PASS (171 files).
-  Commits: `ef5f7a6` → `f5f2b68` → `a53b8d2`; tree clean; origin push still owed.
+- **T15 pin + live feed (`cc6e7e2`):** `glSelfCheck.ts` gains `SceneRenderer`,
+  `GLPin`/`GL_PIN_OK`, `resolveSceneRenderer` (pin → force-one-shot → capability),
+  `shouldRenderSize` (mount gate: finite and ≥10 px) and `GLDiag`; `useMapDiagStore`
+  persists the pin to `tw.glPin.v1` (localStorage-guarded, node/SSR-safe) via
+  `setGlPin(reason)`; ThreeScene gates `renderer.setSize` on `shouldRenderSize`;
+  live-feed option added to the dashboard (Scene3DViewer/ThreeScene);
+  `scripts/no_img_scene.mjs` guard script + package.json script.
+- **Build fix (`ebcae60`):** the T15 `shouldRenderSize` specs never imported the helper
+  (9× TS2304, 2 red vitest specs), and `setGlPin`'s updater declared an unused `s`
+  (TS6133) — both halves of the red `tsc` gate. Fixed by completing the
+  `../glSelfCheck` import (NOT redefining the guard inside the test, which would have
+  asserted against a copy instead of the shipping gate) and dropping the unused param.
+- Gates: pytest 44 · vitest 24 files / 112 tests · tsc 0 · claim_audit PASS (171 files) ·
+  client build ✓. Commits: `ef5f7a6` → `f5f2b68` → `a53b8d2` → `4df5835` → `cc6e7e2` →
+  `ebcae60`; tree clean; **pushed (`origin/main` = `ebcae60`)**.
 
 ### Ingestion & data
 - Bun ingest worker: FIRMS area-query polling (bbox 68,6,98,36 India), archive-edge
@@ -121,7 +134,8 @@
 - Docs: ARCHITECTURE.md, DEPLOYMENT.md (incl. demo runbook), USER_GUIDE.md.
 
 ## What's Left / Known Gaps
-- Working tree contains many uncommitted changes (see activeContext) — needs review/commit.
+- Nothing uncommitted: tree CLEAN and pushed as of `ebcae60` (the earlier "many uncommitted
+  changes" note is resolved — see activeContext Working Tree State).
 - MODIS→VIIRS cross-sensor transfer: untested, disclosed on Model Card.
 - Live FIRMS archive-based training refinement: stated next step (currently synthetic).
 - ST-GNN/XGBoost members optional (torch/torch-geometric not in default requirements).
@@ -154,4 +168,7 @@ response engine · 14 ship sprint (claims gate, docs, Docker) · 15 canvas-defau
 16 imagery/screen-lock/facility dossier · 17 WebGL context-loss recovery · 20 Mercator-correct
 GIBS on canvas. **23 LIVE WIRE (GDELT/EONET/GDACS + TV strip + brief), per-detection Scene
 2.0 (sprites + ellipse + plume + replay), resizable dock/drawers.** Later live-FIRMS +
-deployment sprint (see git log).
+deployment sprint (see git log). **24 T9 carto clarity (+ mergeGeometries crash fix), T10 GL
+rescue ladder, T13 3D-for-any-hotspot, T15 persisted GL pin (`tw.glPin.v1`) + live-feed
+option in the dash; `ebcae60` build fix (missing `shouldRenderSize` test import + unused
+param in `setGlPin`).**

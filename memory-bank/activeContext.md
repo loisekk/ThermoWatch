@@ -1,8 +1,9 @@
 # Active Context
 
-> Status as of 2026-09-15 · HEAD `main` = `a53b8d2` — T9 clarity pass + T10 GL pin ladder +
-> T13 3D-for-any-hotspot, all gated (vitest 24 files / 108 tests · tsc 0 · pytest 44 ·
-> claim_audit PASS 171). Working tree CLEAN. `origin/main` still at `5845fa0` (push owed).
+> Status as of 2026-09-15 · HEAD `main` = `ebcae60` — T9 clarity pass + T10/T15 GL pin
+> ladder + T13 3D-for-any-hotspot + live-feed option in the dash (`cc6e7e2`), all gated
+> (vitest 24 files / 112 tests · tsc 0 · pytest 44 · claim_audit PASS 171).
+> Working tree CLEAN and **`origin/main` = `ebcae60`** — the `5845fa0` push debt is settled.
 
 ## Current Focus
 - **T9 cartographic clarity pass is APPLIED, GATED and COMMITTED (`ef5f7a6`)** — cased roads
@@ -24,6 +25,20 @@
 - **T13 3D-for-any-hotspot (`a53b8d2`)** — `useUIStore.openScene/closeScene`, shortcut
   `V` (opens the selected event's scene), dossier header `3D scene · V` action,
   deep link `app.html?…&scene=<eventId>` (dialog opens when the event exists).
+- **T15 persisted pin + live feed in the dash (`cc6e7e2`)** — `glSelfCheck.ts` gains
+  `SceneRenderer`, `GLPin`/`GL_PIN_OK`, `resolveSceneRenderer` (pin → force-one-shot →
+  capability), `shouldRenderSize` (layout-safe mount gate: finite and ≥10 px) and the
+  `GLDiag` payload; `useMapDiagStore` persists the pin to `tw.glPin.v1`
+  (localStorage-guarded, node/SSR-safe) via `setGlPin(reason)`; ThreeScene gates
+  `renderer.setSize` behind `shouldRenderSize`; live-feed option wired into the
+  dashboard; `scripts/no_img_scene.mjs` guard + package.json script.
+- **Build fix (`ebcae60`, this session)** — `cc6e7e2` shipped the T15 test block calling
+  `shouldRenderSize` without importing it (9× TS2304 + 2 red vitest specs), and
+  `useMapDiagStore.setGlPin`'s updater took an unused `s` (TS6133) — both halves of the
+  red `tsc` gate. The guard already lives in `glSelfCheck.ts` (ThreeScene imports it from
+  there), so the fix completes the test's `../glSelfCheck` import rather than redefining
+  the guard in the test (which would have tested a copy, not the shipping gate).
+  Re-verified: tsc 0 · vitest 24/112 · `npm run build` ✓.
 - Continuous hardening of the FIRMS-live ingestion pipeline and deployment story
   (Render API + GH Actions `ingest-cron` every 15 min, Vercel client, CORS robustness).
 - The dev machine has broken WebGL frame presentation → rendering resilience
@@ -54,8 +69,12 @@
   (exit 0), README/USER_GUIDE/ARCHITECTURE updated.
 
 ## Working Tree State (IMPORTANT)
-- **CLEAN as of commit `1d61b2d`** (2026-09-14 ~23:16 IST). The whole Session 20→23.5 stack
-  plus prior environment drift went into ONE commit with the T8 message, because router.py
+- **CLEAN as of `ebcae60`** (2026-09-15) and **fully pushed** — `origin/main` = `ebcae60`.
+  Commit chain since the `1d61b2d` catch-all: `ef5f7a6` (T9 carto + mergeGeometries crash
+  fix) → `f5f2b68` (T10 GL ladder) → `a53b8d2` (T13) → `4df5835` (memory-bank) →
+  `cc6e7e2` (T15 pin + live feed in dash) → `ebcae60` (build fix).
+- History note on `1d61b2d` (2026-09-14 ~23:16 IST): the whole Session 20→23.5 stack plus
+  prior environment drift went into ONE commit with the T8 message, because router.py
   imports the then-untracked news/scene modules — the tree was only coherent as a unit.
 
 ## Active Decisions & Considerations
@@ -78,8 +97,9 @@
    on T11 for imagery/terrain toggles) · perf folds (static matrices, sprite pool,
    replay visibility flips). Hover-tooltip `3D` chip in globe/map was consciously
    SKIPPED: cursor-following tooltips cannot host clickable actions.
-2. Push 5 commits to origin (`origin/main` at `5845fa0`) → CORS curl + Vercel hash
-   check → Vercel redeploy **no-cache**.
+2. ~~Push to origin~~ **DONE** (`origin/main` = `ebcae60`). Remaining: confirm the Vercel
+   auto-redeploy went green after `ebcae60` (redeploy **no-cache** if it serves a stale
+   hash) → CORS curl against the deployed API.
 3. Rehearse full demo (≤5 min script + scene beat + forced-GL pin moment) by
    **Sep 17**, then submit (buffer Sep 18–19).
 4. Post-SIH queue: ReliefWeb provider, Guardian key, source-tier badges, LLM wire

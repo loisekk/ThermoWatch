@@ -1,9 +1,10 @@
 # Active Context
 
-> Status as of 2026-09-15 · HEAD `main` = `ebcae60` — T9 clarity pass + T10/T15 GL pin
+> Status as of 2026-09-15 · code HEAD `main` = `ebcae60` — T9 clarity pass + T10/T15 GL pin
 > ladder + T13 3D-for-any-hotspot + live-feed option in the dash (`cc6e7e2`), all gated
 > (vitest 24 files / 112 tests · tsc 0 · pytest 44 · claim_audit PASS 171).
-> Working tree CLEAN and **`origin/main` = `ebcae60`** — the `5845fa0` push debt is settled.
+> Working tree CLEAN; `origin/main` carries every commit including this memory-bank doc
+> update — the long-standing `5845fa0` push debt is settled.
 
 ## Current Focus
 - **T9 cartographic clarity pass is APPLIED, GATED and COMMITTED (`ef5f7a6`)** — cased roads
@@ -69,10 +70,11 @@
   (exit 0), README/USER_GUIDE/ARCHITECTURE updated.
 
 ## Working Tree State (IMPORTANT)
-- **CLEAN as of `ebcae60`** (2026-09-15) and **fully pushed** — `origin/main` = `ebcae60`.
+- **CLEAN as of the code fix `ebcae60`** (2026-09-15) and **fully pushed** — `origin/main`
+  carries every commit, including the memory-bank doc commits that sit on top.
   Commit chain since the `1d61b2d` catch-all: `ef5f7a6` (T9 carto + mergeGeometries crash
   fix) → `f5f2b68` (T10 GL ladder) → `a53b8d2` (T13) → `4df5835` (memory-bank) →
-  `cc6e7e2` (T15 pin + live feed in dash) → `ebcae60` (build fix).
+  `cc6e7e2` (T15 pin + live feed in dash) → `ebcae60` (build fix) → `76da318` (docs).
 - History note on `1d61b2d` (2026-09-14 ~23:16 IST): the whole Session 20→23.5 stack plus
   prior environment drift went into ONE commit with the T8 message, because router.py
   imports the then-untracked news/scene modules — the tree was only coherent as a unit.

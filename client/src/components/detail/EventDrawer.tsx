@@ -7,11 +7,13 @@ import { haversineKm } from '@/lib/geo/distance';
 import { hashString, mulberry32 } from '@/lib/random/mulberry';
 import { coordLabel, fmtKm, fmtMW, relTime, utcStamp } from '@/lib/utils/format';
 import { useFireStore } from '@/store/useFireStore';
-import { useUIStore } from '@/store/useUIStore';
+import { panelWidth, useUIStore } from '@/store/useUIStore';
+import { ResizeHandle } from '@/components/ui/ResizeHandle';
+import { useSceneContextStore } from '@/store/useSceneContextStore';
 import { suggestFireType } from '@/features/context/suggestFireType';
 import { ResponsePlan } from '@/features/response/ResponsePlan';
 
-/** Slide-over incident dossier for the selected detection. */
+/** Slide-over incident dossier for the selected detection (resizable since S23). */
 export function EventDrawer() {
   const selectedId = useFireStore((s) => s.selectedEventId);
   const events = useFireStore((s) => s.events);
@@ -19,6 +21,11 @@ export function EventDrawer() {
   const select = useFireStore((s) => s.select);
   const raiseAlert = useFireStore((s) => s.raiseAlert);
   const setSceneEventId = useUIStore((s) => s.setSceneEventId);
+  const width = useUIStore((s) => panelWidth(s.panelSizes, 'eventDrawer'));
+  const setPanelSize = useUIStore((s) => s.setPanelSize);
+  const resetPanelSize = useUIStore((s) => s.resetPanelSize);
+  const sceneCtx = useSceneContextStore((s) => s.eventId === selectedId ? s.context : null);
+  const sceneNearest = useSceneContextStore((s) => s.eventId === selectedId ? s.nearest : null);
   const e = events.find((x) => x.id === selectedId);
 
   const nearest = useMemo(() => {
@@ -42,7 +49,11 @@ export function EventDrawer() {
   const meta = CLASS_META[e.classification.primary];
 
   return (
-    <div role="dialog" aria-label={`Incident dossier ${e.id}`} className="drawer-in fixed bottom-7 right-0 top-12 z-30 flex w-[400px] flex-col gap-2.5 overflow-y-auto border-l border-edge bg-panel/95 p-3 backdrop-blur">
+    <div role="dialog" aria-label={`Incident dossier ${e.id}`} className="drawer-in fixed bottom-7 right-0 top-12 z-30 flex flex-col gap-2.5 overflow-y-auto border-l border-edge bg-panel/95 p-3 backdrop-blur" style={{ width }}>
+      <ResizeHandle edge="left" width={width} min={360} max={720}
+        onChange={(w) => setPanelSize('eventDrawer', w)}
+        onReset={() => resetPanelSize('eventDrawer')}
+        label="Resize dossier (drag, arrow keys, double-click to reset)" />
       <header className="flex items-start justify-between gap-2">
         <div>
           <div className="mono text-[10px] text-dim">{e.id} · {utcStamp(e.detectedAt)} · {relTime(e.detectedAt)}</div>
@@ -103,6 +114,33 @@ export function EventDrawer() {
         <div className="mono mb-1.5 text-[9px] uppercase tracking-widest text-dim">response recommendation · model, not orders</div>
         <ResponsePlan event={e} />
       </section>
+
+      {sceneCtx && (
+        <section className="rounded-md border border-edge bg-panel2/60 p-2.5">
+          <div className="mono mb-1.5 text-[9px] uppercase tracking-widest text-dim">scene context provenance</div>
+          {sceneCtx.source === 'osm-overpass' ? (
+            <>
+              <div className="text-[10px] text-mute">source: OSM Overpass · radius {sceneCtx.radius_m} m · snapshot {sceneCtx.snapshot_at.slice(0, 16).replace('T', ' ')}Z · {sceneCtx.attribution}</div>
+              <div className="mono mt-1 text-[9px] text-dim">
+                buildings {sceneCtx.buildings.length} · trees {sceneCtx.trees.length} · roads {sceneCtx.roads.length} · water {sceneCtx.water.length} · wood {sceneCtx.wood.length}
+              </div>
+              {(sceneCtx.buildings.length > 0) && (
+                <div className="mono mt-0.5 text-[9px] text-dim">
+                  height provenance: {Math.round(100 * (sceneCtx.buildings.filter((b) => b.height_source !== 'estimated').length) / sceneCtx.buildings.length)}% tagged / {100 - Math.round(100 * sceneCtx.buildings.filter((b) => b.height_source !== 'estimated').length / sceneCtx.buildings.length)}% estimated
+                </div>
+              )}
+              {sceneNearest && (
+                <div className="mono mt-0.5 text-[9px] text-amber">
+                  top-FRP hotspot ≈{sceneNearest.m.toFixed(0)} m from OSM way {sceneNearest.id}… ({sceneNearest.kind})
+                </div>
+              )}
+              <div className="mono mt-1 text-[8px] leading-relaxed text-dim">OSM is community-mapped; coverage varies by region.</div>
+            </>
+          ) : (
+            <div className="text-[10px] text-mute">OSM unreachable — the 3D scene renders labelled SCHEMATIC context (never invented).</div>
+          )}
+        </section>
+      )}
 
       <section className="rounded-md border border-edge bg-panel2/60 p-2.5">
         <div className="mono mb-1.5 text-[9px] uppercase tracking-widest text-dim">multi-source validation</div>

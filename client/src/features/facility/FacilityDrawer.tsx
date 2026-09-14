@@ -5,6 +5,8 @@ import { Sparkline } from '@/components/ui/charts/Sparkline';
 import { CLASS_META, SUBTYPE_LABEL } from '@/config/constants';
 import { NBC_HAZARD, OSM_TAGS, overpassTurboUrl } from '@/config/regulatory';
 import { useFireStore } from '@/store/useFireStore';
+import { panelWidth, useUIStore } from '@/store/useUIStore';
+import { ResizeHandle } from '@/components/ui/ResizeHandle';
 import { api } from '@/services/api/client';
 import { haversineKm } from '@/lib/geo/distance';
 import { FacilityIso } from './FacilityIso';
@@ -18,6 +20,9 @@ export function FacilityDrawer() {
   const selectFacility = useFireStore((s) => s.selectFacility);
   const facilities = useFireStore((s) => s.facilities);
   const events = useFireStore((s) => s.events);
+  const width = useUIStore((s) => panelWidth(s.panelSizes, 'facilityDrawer'));
+  const setPanelSize = useUIStore((s) => s.setPanelSize);
+  const resetPanelSize = useUIStore((s) => s.resetPanelSize);
   const f = facilities.find((x) => x.id === id) ?? null;
   const [resp, setResp] = useState<Resp | null>(null);
 
@@ -43,7 +48,11 @@ export function FacilityDrawer() {
   const nbc = NBC_HAZARD[f.hazard];
 
   return (
-    <div role="dialog" aria-label={`Facility dossier ${f.name}`} className="drawer-in fixed bottom-7 right-0 top-12 z-30 flex w-[400px] flex-col gap-2.5 overflow-y-auto border-l border-edge bg-panel/95 p-3 backdrop-blur">
+    <div role="dialog" aria-label={`Facility dossier ${f.name}`} className="drawer-in fixed bottom-7 right-0 top-12 z-30 flex flex-col gap-2.5 overflow-y-auto border-l border-edge bg-panel/95 p-3 backdrop-blur" style={{ width }}>
+      <ResizeHandle edge="left" width={width} min={360} max={720}
+        onChange={(w) => setPanelSize('facilityDrawer', w)}
+        onReset={() => resetPanelSize('facilityDrawer')}
+        label="Resize facility dossier (drag, arrow keys, double-click to reset)" />
       <header className="flex items-start justify-between gap-2">
         <div>
           <div className="mono text-[10px] text-dim">{f.id} · {f.lat.toFixed(3)}°, {f.lon.toFixed(3)}°</div>

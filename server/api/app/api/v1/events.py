@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Query
 
 from app.data.facilities import FACILITIES
-from app.services import event_store
+from app.services import detection_buffer, event_store
 
 router = APIRouter()
 DAY = 86_400_000
@@ -24,6 +24,22 @@ def get_event(event_id: str):
     e = event_store.get(event_id)
     if not e: raise HTTPException(404, "unknown event")
     return e
+
+@router.get("/events/{event_id}/detections")
+def event_detections(event_id: str, days: int = Query(30, ge=1, le=180)):
+    """Per-detection live buffer for the incident scene (Scene 2.0).
+
+    Keyed on the event's ~400 m cell: every raw FIRMS detection recorded in that
+    cell inside the `days` window — the scene draws one sprite per detection,
+    never a centroid ball. 404 only when BOTH the event and its cell buffer are
+    unknown (a freshly restarted API with a pruned buffer is an empty list, not
+    an error — the scene falls back to centroid mode honestly)."""
+    e = event_store.get(event_id)
+    if not e:
+        raise HTTPException(404, "unknown event")
+    snap = detection_buffer.snapshot(e["cell"], days=days)
+    return {"event_id": event_id, "cell": e["cell"], "count": len(snap),
+            "detections": snap}
 
 @router.get("/stats/kpis")
 def kpis():

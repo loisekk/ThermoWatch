@@ -1,10 +1,18 @@
 ﻿import { useEffect, useMemo, useRef } from 'react';
 import { CLASS_META, SUBTYPE_LABEL } from '@/config/constants';
 import type { Facility, FireEvent } from '@/types/domain';
+import { capByFrp, clusterEllipse, hotspotColor, hotspotRadius, toEnu,
+  type Detection } from '@/features/scene/sceneData';
+import { enuUnits, ROAD_HALF_W, type OsmBuildingKind, type SceneContext } from '@/features/scene/osmScene';
 
 const UNIT = 100; // 1 scene unit = 100 m
 const HAZ_HEIGHT: Record<string, number> = { 'G-III': 6, 'G-II': 4, 'G-I': 2.5 };
 const TICK_MS = 66; // ~15 fps via setInterval — deliberately NOT requestAnimationFrame
+
+const CANVAS_KIND: Record<OsmBuildingKind, string> = {
+  industrial: '#8a9199', commercial: '#a9b2bd',
+  residential: '#cbb28a', generic: '#9d9aa0',
+};
 
 interface SceneState {
   rings: { hours: number; r: number; i: number }[];
@@ -14,9 +22,19 @@ interface SceneState {
   fac: Facility | null;
 }
 
+interface SceneProps {
+  ev: FireEvent;
+  facilities: Facility[];
+  /** Per-detection cloud (capped); null/empty = legacy centroid mode (honest chip). */
+  detections?: Detection[] | null;
+  /** Live OSM context — simplified parity (footprints, trees, roads, patches). */
+  osm?: SceneContext | null;
+}
+
 /** Isometric Canvas2D incident scene — renderer-independent (no WebGL, no rAF, no CDN).
- *  Axonometric projection, 1 unit = 100 m; same geometry as the Three.js scene. */
-export function CanvasScene({ ev, facilities }: { ev: FireEvent; facilities: Facility[] }) {
+ *  Axonometric projection, 1 unit = 100 m; same geometry as the Three.js scene.
+ *  Session 23 parity: per-detection hotspot dots + 2σ ellipse (plume/replay off). */
+export function CanvasScene({ ev, facilities, detections, osm: osmCtx }: SceneProps) {
   const wrap = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const view = useRef({ az: Math.PI / 4, zoom: 1, drag: null as null | { x: number } });
@@ -35,6 +53,43 @@ export function CanvasScene({ ev, facilities }: { ev: FireEvent; facilities: Fac
     }
     return { rings, fx, fz, fh, fac };
   }, [ev, fac]);
+
+  // Per-detection hotspot cloud in scene coords (east = +x, north = +y units).
+  const dets = useMemo(() => {
+    if (!detections?.length) return null;
+    const capped = capByFrp(detections);
+    const enu = capped.map((d) => toEnu(ev.lat, ev.lon, d.lat, d.lon));
+    const pts = capped.map((d, i) => ({
+      x: enu[i].e / UNIT, y: enu[i].n / UNIT,
+      r: hotspotRadius(d.frp_mw), color: hotspotColor(d.brightness_k),
+    }));
+    const ell = clusterEllipse(enu);
+    return { pts, ell };
+  }, [detections, ev.lat, ev.lon]);
+
+  // OSM parity shapes (real footprints/trees/roads/patches, simplified).
+  const osmShapes = useMemo(() => {
+    if (osmCtx?.source !== 'osm-overpass') return null;
+    const O = { lat: ev.lat, lon: ev.lon };
+    const xy = (la: number, lo: number) => {
+      const u = enuUnits(O, la, lo);
+      return { x: u.x, y: -u.z };
+    };
+    return {
+      water: osmCtx.water.map((w) => w.outline.map(([la, lo]) => xy(la, lo))),
+      wood: osmCtx.wood.map((w) => w.outline.map(([la, lo]) => xy(la, lo))),
+      roads: osmCtx.roads.map((r) => ({
+        pts: r.points.map(([la, lo]) => xy(la, lo)),
+        halfW: (ROAD_HALF_W[r.cls] ?? 2) / UNIT,
+      })),
+      buildings: osmCtx.buildings.slice(0, 80).map((b) => ({
+        pts: b.outline.map(([la, lo]) => xy(la, lo)),
+        hU: Math.max(0.15, b.height_m / UNIT),
+        color: CANVAS_KIND[b.kind],
+      })),
+      trees: osmCtx.trees.slice(0, 300).map((t) => xy(t.lat, t.lon)),
+    };
+  }, [osmCtx, ev.lat, ev.lon]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -70,6 +125,69 @@ export function CanvasScene({ ev, facilities }: { ev: FireEvent; facilities: Fac
         ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy); ctx.stroke();
         a = proj(-24, g, 0); b = proj(24, g, 0);
         ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy); ctx.stroke();
+      }
+
+      // OSM surroundings (simplified parity — real footprints/trees/roads/patches)
+      if (osmShapes) {
+        const fillRing = (pts: { x: number; y: number }[], z: number, color: string, alpha = 1) => {
+          if (pts.length < 3) return;
+          ctx.beginPath();
+          pts.forEach((p, i) => {
+            const q = proj(p.x, p.y, z);
+            if (i === 0) ctx.moveTo(q.sx, q.sy); else ctx.lineTo(q.sx, q.sy);
+          });
+          ctx.closePath();
+          if (alpha < 1) ctx.globalAlpha = alpha;
+          ctx.fillStyle = color; ctx.fill();
+          if (alpha < 1) ctx.globalAlpha = 1;
+        };
+        for (const w of osmShapes.water) fillRing(w, 0.02, '#2e5f7a');
+        for (const w of osmShapes.wood) fillRing(w, 0.015, '#2d4a2e');
+        ctx.lineCap = 'round';
+        for (const r of osmShapes.roads) {
+          ctx.beginPath();
+          r.pts.forEach((p, i) => {
+            const q = proj(p.x, p.y, 0.01);
+            if (i === 0) ctx.moveTo(q.sx, q.sy); else ctx.lineTo(q.sx, q.sy);
+          });
+          ctx.strokeStyle = '#3a4450';
+          ctx.lineWidth = Math.max(1, (r.halfW * 2) * s * 0.9);
+          ctx.stroke();
+        }
+        for (const bld of osmShapes.buildings) {
+          fillRing(bld.pts, 0.005, '#0d1319', 0.7);           // ground footprint
+          fillRing(bld.pts, bld.hU, bld.color);               // top face
+        }
+        ctx.fillStyle = '#2c5130';
+        for (const t of osmShapes.trees) {
+          const q = proj(t.x, t.y, 0.03);
+          ctx.beginPath(); ctx.arc(q.sx, q.sy, Math.max(1.2, 0.035 * s), 0, 7); ctx.fill();
+        }
+      }
+
+      // per-detection hotspots — Session 23 canvas parity (dots + 2σ ellipse)
+      if (dets) {
+        if (dets.ell) {
+          ctx.beginPath();
+          for (let i = 0; i <= 48; i++) {
+            const t = (i / 48) * Math.PI * 2;
+            const ex = (dets.ell.a * Math.cos(t)) / UNIT;
+            const ey = (dets.ell.b * Math.sin(t)) / UNIT;
+            const rx = ex * Math.cos(dets.ell.rot) - ey * Math.sin(dets.ell.rot);
+            const ry = ex * Math.sin(dets.ell.rot) + ey * Math.cos(dets.ell.rot);
+            const p = proj(dets.ell.ce / UNIT + rx, dets.ell.cn / UNIT + ry, 0);
+            if (i === 0) ctx.moveTo(p.sx, p.sy); else ctx.lineTo(p.sx, p.sy);
+          }
+          ctx.closePath();
+          ctx.strokeStyle = 'rgba(255,107,53,0.8)';
+          ctx.lineWidth = 1.2;
+          ctx.stroke();
+        }
+        for (const h of dets.pts) {
+          const p = proj(h.x, h.y, 0);
+          ctx.fillStyle = h.color;
+          ctx.beginPath(); ctx.arc(p.sx, p.sy, Math.max(1.5, h.r * 1.6), 0, 7); ctx.fill();
+        }
       }
 
       // spread rings
@@ -177,7 +295,7 @@ export function CanvasScene({ ev, facilities }: { ev: FireEvent; facilities: Fac
       window.removeEventListener('pointerup', onUp);
       wrapEl.removeEventListener('wheel', onWheel);
     };
-  }, [scene, ev]);
+  }, [scene, ev, dets, osmShapes]);
 
   return (
     <div ref={wrap} className="absolute inset-0 cursor-grab active:cursor-grabbing">

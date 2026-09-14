@@ -48,6 +48,15 @@ PATTERNS = [
     (re.compile(r"\b100\s?%\s*accuracy\b|\bperfect accuracy\b|\balways correct\b", re.I),
      "claim-safety: report specific F1/precision/recall"),
     (re.compile(r"\bguarantees?\b", re.I), "claim-safety: avoid 'guarantee'"),
+    # Session 23 (LIVE WIRE): open-source news feeds are near-real-time wire
+    # corroboration, never verification/confirmation; plumes are illustrative,
+    # not dispersion models. Lookbehind guards keep our own honest phrasing legal.
+    (re.compile(r"(?<!near[- ])real[\s-]?time\s+(news|wire|newsfeed|stream)", re.I),
+     "claim-safety: 'real-time news/wire/stream' must be 'near-real-time wire' (provider latency 15 min-6 h)"),
+    (re.compile(r"news\s+(confirms|verifies|proves)", re.I),
+     "claim-safety: news corroborates, never confirms/verifies/proves"),
+    (re.compile(r"(?<!not a )dispersion model", re.I),
+     "claim-safety: plumes are illustrative, not a dispersion model"),
 ]
 
 

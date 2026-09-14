@@ -27,7 +27,7 @@ export function StatusTicker() {
         </span>
       )}
       <span className="mono ml-auto shrink-0 text-[10px] text-dim">
-        buffer {fmtInt(events.length)} ev · data: NASA FIRMS · NASA GIBS · © OpenStreetMap contributors (ODbL) · ESA WorldCover · Natural Earth
+        buffer {fmtInt(events.length)} ev · data: NASA FIRMS · NASA GIBS · © OpenStreetMap contributors (ODbL) · ESA WorldCover · Natural Earth · News wire: GDELT DOC/GEO 2.0 · NASA EONET · GDACS (EC-JRC/UN) · streams © broadcasters via YouTube
       </span>
     </footer>
   );

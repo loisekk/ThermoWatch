@@ -1,7 +1,31 @@
 import { create } from 'zustand';
 
 export type ViewMode = '2d' | '3d';
-export type PanelKey = 'overview' | 'persistence' | 'alerts' | 'facilities' | 'agent' | 'predict' | 'model' | 'analytics' | 'history';
+export type PanelKey = 'overview' | 'persistence' | 'alerts' | 'facilities' | 'agent' | 'predict' | 'model' | 'analytics' | 'history' | 'news';
+
+/** Resizable-surface registry: [min, max, default] per key (Session 23). */
+export const PANEL_CLAMP: Record<string, [number, number, number]> = {
+  rightDock: [360, 640, 360],
+  eventDrawer: [360, 720, 400],
+  facilityDrawer: [360, 720, 400],
+};
+const LS_KEY = 'tw.panelSizes.v1';
+
+function loadSizes(): Record<string, number> {
+  if (typeof localStorage === 'undefined') return {}; // node tests / SSR safety
+  try { return JSON.parse(localStorage.getItem(LS_KEY) ?? '{}') as Record<string, number>; }
+  catch { return {}; }
+}
+function saveSizes(s: Record<string, number>): void {
+  if (typeof localStorage === 'undefined') return;
+  try { localStorage.setItem(LS_KEY, JSON.stringify(s)); } catch { /* private mode */ }
+}
+/** Current width for a resizable key (persisted or default). */
+export function panelWidth(sizes: Record<string, number>, key: string): number {
+  const d = PANEL_CLAMP[key] ?? [0, 0, 400];
+  const w = sizes[key] ?? d[2];
+  return Math.min(d[1], Math.max(d[0], w));
+}
 
 interface UIState {
   viewMode: ViewMode; panel: PanelKey; autoRotate: boolean;
@@ -12,6 +36,9 @@ interface UIState {
     setSceneEventId: (id: string | null) => void;
   selfTest: boolean;
   toggleSelfTest: () => void;
+  panelSizes: Record<string, number>;
+  setPanelSize: (key: string, w: number) => void;
+  resetPanelSize: (key: string) => void;
 }
 
 export const useUIStore = create<UIState>()((set) => ({
@@ -23,6 +50,18 @@ export const useUIStore = create<UIState>()((set) => ({
     setSceneEventId: (sceneEventId) => set({ sceneEventId }),
   selfTest: false,
   toggleSelfTest: () => set((s) => ({ selfTest: !s.selfTest })),
+  panelSizes: loadSizes(),
+  setPanelSize: (key, w) => set((s) => {
+    const d = PANEL_CLAMP[key] ?? [0, 0, 400];
+    const next = { ...s.panelSizes, [key]: Math.min(d[1], Math.max(d[0], Math.round(w))) };
+    saveSizes(next);
+    return { panelSizes: next };
+  }),
+  resetPanelSize: (key) => set((s) => {
+    const next = { ...s.panelSizes, [key]: (PANEL_CLAMP[key] ?? [0, 0, 400])[2] };
+    saveSizes(next);
+    return { panelSizes: next };
+  }),
 }));
 
 

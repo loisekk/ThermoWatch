@@ -1,4 +1,6 @@
 import { api, API_BASE } from '@/services/api/client';
+import { useNewsStore } from '@/store/useNewsStore';
+import { buildWireBrief } from '@/features/news/wireBrief';
 
 /** Tools the LLM agent may call — all execute against OUR FastAPI, key never leaves browser. */
 export const TOOL_DEFS = [
@@ -6,6 +8,7 @@ export const TOOL_DEFS = [
   { type: 'function', function: { name: 'tw_kpis', description: 'Pan-India KPI snapshot (24h)', parameters: { type: 'object', properties: {} } } },
   { type: 'function', function: { name: 'tw_run_model', description: 'Run the fire classification ML model on explicit parameters', parameters: { type: 'object', properties: { frp: { type: 'number' }, persist_days: { type: 'number' }, facility_subtype: { type: 'string' }, include_spread: { type: 'boolean' } }, required: ['frp'] } } },
   { type: 'function', function: { name: 'tw_event_dossier', description: 'Full dossier for one event id', parameters: { type: 'object', properties: { event_id: { type: 'string' } }, required: ['event_id'] } } },
+  { type: 'function', function: { name: 'tw_summarize_wire', description: 'Rule-based LIVE WIRE digest (open-source news corroboration; no LLM)', parameters: { type: 'object', properties: {} } } },
 ] as const;
 
 export async function executeTool(name: string, args: Record<string, unknown>): Promise<string> {
@@ -21,6 +24,12 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
       case 'tw_kpis': return JSON.stringify(await api.get('/api/v1/stats/kpis'));
       case 'tw_run_model': return JSON.stringify(await api.post('/api/v1/predict', { frp: 120, ...args }));
       case 'tw_event_dossier': return JSON.stringify(await api.get(`/api/v1/events/${String(args.event_id)}`));
+      case 'tw_summarize_wire': {
+        // Trigger a refresh when the wire has never synced, then digest locally.
+        if (!useNewsStore.getState().feed) await useNewsStore.getState().sync();
+        const brief = buildWireBrief(useNewsStore.getState().feed?.items ?? []);
+        return JSON.stringify(brief);
+      }
       default: return JSON.stringify({ error: `unknown tool ${name}` });
     }
   } catch (e) {

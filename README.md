@@ -189,18 +189,53 @@ opaque silhouettes. MapLibre needed no change: it is Mercator-native. Unit-teste
 math in client/src/lib/__tests__/tiles.test.ts.
 
 ## Landing ? Dashboard bridge + Session 22
-`client/index.html` = marketing/landing (opens first at `/`); `client/app.html` = React dashboard. Deep links: `/app.html?vp=3d&panel=k&lat=..&lon=..` � every launch/operate CTA and the drawer's FOCUS-IN-3D button deep-link into the console. Landing probes `:8000/api/v1/healthz`: `BACKEND LIVE` ? API explorer sends real requests; else honest `SIMULATED` labels.
-- Global shortcuts ignore typing surfaces (agent chat, forms) � `isTypingTarget` guard + unit tests.
+`client/index.html` = marketing/landing (opens first at `/`); `client/app.html` = React dashboard. Deep links: `/app.html?vp=3d&panel=k&lat=..&lon=..` � every launch/operate CTA and the drawer's FOCUS-IN-3D button deep-link into the console. Landing probes `:8000/api/v1/healthz`: `BACKEND LIVE` ? API explorer sends real requests; else honest `SIMULATED` labels.
+- Global shortcuts ignore typing surfaces (agent chat, forms) � `isTypingTarget` guard + unit tests.
 - Agent settings: draft ? Save / Cancel / Test connection (key stays local, never auto-written).
 - Manual Model Run exposes the full feature contract + lat/lon + wind + spread params, scenario presets, copy-JSON, and 4-class probability bars; server PredictRequest accepts detections_30d + frp_stability.
 
-## FIRMS live ingestion � secrets & deployment
+## FIRMS live ingestion � secrets & deployment
 
 The **puller** is the Bun worker (local `bun run dev` or the GitHub Actions `ingest-cron`); Render hosts the API/WS and only **receives** data.
 
-**Local**: copy `server/ingest/.env.example` ? `server/ingest/.env`, set `FIRMS_API_KEY` (https://firms.modaps.eosdis.nasa.gov/api/map_key/), `TW_API_URL=http://127.0.0.1:8000` (use 127.0.0.1 � Bun resolves localhost to ::1, uvicorn binds IPv4). Self-test: `bun run firms:test`.
+**Local**: copy `server/ingest/.env.example` ? `server/ingest/.env`, set `FIRMS_API_KEY` (https://firms.modaps.eosdis.nasa.gov/api/map_key/), `TW_API_URL=http://127.0.0.1:8000` (use 127.0.0.1 � Bun resolves localhost to ::1, uvicorn binds IPv4). Self-test: `bun run firms:test`.
 
 **GitHub Actions secrets** (Settings ? Secrets ? Actions): `FIRMS_API_KEY`, `TW_API_URL=https://<render-app>.onrender.com`, `TW_INGEST_TOKEN` (same value as the API's `TW_INGEST_TOKEN` env on Render). The committed `ingest-cron` workflow runs every 15 min (`SINGLE_SHOT=1`) and doubles as the keep-warm ping.
 
-**Worker notes:** FIRMS area endpoint = `{KEY}/{SOURCE}/{bbox}/{days_back 1..5}/{YYYY-MM-DD}`; the worker self-calibrates the archive edge at boot (probe ladder =3 req). `POLL_MS=900000` (15 min � 4 req/h, far under the 100/h key limit).
-**Render deploy note:** the trained bundle is gitignored (30 MB); `eval_report.json` IS committed so the Model Card shows real metrics anywhere. To serve the trained ensemble on Render, set the Build Command to `pip install -r requirements.txt && python -m app.ml.train --source synthetic --samples 4000` � the API then reports `served_by: tw-ensemble-v1`.
+**Worker notes:** FIRMS area endpoint = `{KEY}/{SOURCE}/{bbox}/{days_back 1..5}/{YYYY-MM-DD}`; the worker self-calibrates the archive edge at boot (probe ladder =3 req). `POLL_MS=900000` (15 min � 4 req/h, far under the 100/h key limit).
+**Render deploy note:** the trained bundle is gitignored (30 MB); `eval_report.json` IS committed so the Model Card shows real metrics anywhere. To serve the trained ensemble on Render, set the Build Command to `pip install -r requirements.txt && python -m app.ml.train --source synthetic --samples 4000` � the API then reports `served_by: tw-ensemble-v1`.
+## Session 23 — LIVE WIRE, per-detection scene, resizable panels
+
+**News corroboration (key `N`, deep link `panel=n`).** Zero-secret open-source wire —
+GDELT DOC 2.0 + GDELT GEO 2.0 + NASA EONET + GDACS (EC-JRC/UN), server-cached (TTL 5 min),
+single-flight, last-good-on-error (a provider outage is a visible `stale` badge, never a
+500/blank). Items are server-correlated to FIRMS events (≤ 75 km / ≤ 72 h). Optional
+broadcast strip (default OFF) lazy-loads YouTube live embeds — streams © broadcasters,
+availability = broadcaster + network. Wire brief is rule-based and labelled as such.
+Honesty line: *unverified open-source reporting · near-real-time wire · corroboration,
+not confirmation.*
+
+**Scene 2.0 — per-detection 3D.** Every FIRMS detection recorded in an event's ~400 m cell
+(`GET /api/v1/events/{id}/detections`, bounded 500×400 ring buffer) renders as ONE additive
+sprite at its true lat/lon + a 2σ cluster ellipse + illustrative plume (labelled, not a
+dispersion model) + replay scrubber. Canvas isometric parity draws the same dots/ellipse.
+No buffer → honest centroid-mode fallback. `scripts/check_news_channels.mjs` verifies the
+broadcast strip's YouTube channel IDs (entry gate while pending).
+
+**Resizable everything.** Drag panel/dock/drawer edges (arrow keys nudge, double-click
+resets); sizes persist in `localStorage`. Claims gate extended: `real-time news/wire/stream`
+must be `near-real-time`, news never *confirms*, plumes are never dispersion models.
+
+## Session 23.5 — the scene becomes the actual place (live OSM context)
+
+On scene-open the server pulls the real surroundings from OSM via the Overpass proxy
+(`GET /api/v1/scene/context`, dual-instance fallback, 6 h cache, single-flight, caps
+600/1500/400/200, fresh-refresh rate-guarded at 60 s/cell): building footprints extruded
+to true/estimated heights (provenance split shown in the drawer), real mapped trees as
+instanced canopies, road ribbons by class, water/wood/land-use patches. Doctrine enforced
+end-to-end: **"real" = fetched from the world, never invented** — sparse OSM renders
+sparse (`OSM SPARSE — rendering what exists`), unreachable OSM renders the labelled
+`SCHEMATIC` fallback, and the anti-confusion callout puts the top-FRP hotspot at
+`≈X m from OSM way NNN…(kind)` — the fire visibly hugs a real mapped building. Shadows
+(WebGL) only when buildings ≤ 400; ACES + sRGB + scene fog. Canvas parity is a labelled
+simplified subset.

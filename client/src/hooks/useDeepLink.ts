@@ -3,7 +3,7 @@ import { useUIStore, type PanelKey } from '@/store/useUIStore';
 
 const PANEL_MAP: Record<string, PanelKey> = {
   o: 'overview', p: 'persistence', a: 'alerts', f: 'facilities', g: 'agent',
-  m: 'predict', k: 'model', x: 'analytics', h: 'history',
+  m: 'predict', k: 'model', x: 'analytics', h: 'history', n: 'news',
 };
 
 /** Reads /app.html?vp=&panel=&lat=&lon= once on mount and applies it to the stores. */

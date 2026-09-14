@@ -10,7 +10,7 @@ export function isTypingTarget(e: KeyboardEvent): boolean {
   return tag === 'input' || tag === 'textarea' || tag === 'select' || t.isContentEditable === true;
 }
 
-/** 1/2 viewport · space hold feed · o/p/a/f/g/m/k/x/h panels · t self-test · esc close.
+/** 1/2 viewport · space hold feed · o/p/a/f/g/m/k/x/h/n panels · t self-test · esc close.
  *  NEVER fires while the user is typing (agent chat, forms, search boxes). */
 export function useKeyboardShortcuts(): void {
   useEffect(() => {
@@ -33,6 +33,7 @@ export function useKeyboardShortcuts(): void {
         case 'k': ui.setPanel('model'); break;
         case 'x': ui.setPanel('analytics'); break;
         case 'h': ui.setPanel('history'); break;
+        case 'n': ui.setPanel('news'); break;
         case 't': ui.toggleSelfTest(); break;
         default: break;
       }

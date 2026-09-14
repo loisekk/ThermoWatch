@@ -4,11 +4,15 @@ Classification source (Session 21): when a user-supplied thermowatch_model.jobli
 is present (app/ml/models/), every detection is classified ML-primarily and the
 10-way posterior is projected to the 4-class UI via the proven inference facade;
 the heuristic ensemble remains the fallback when the model is absent or fails.
+
+Session 23: every classified detection is also recorded in the per-cell
+detection ring buffer (app/services/detection_buffer.py) so the incident scene
+can render one sprite per raw VIIRS 375 m detection.
 """
 import logging
 
 from app.data.facilities import FACILITIES
-from app.services import event_store, heuristic
+from app.services import detection_buffer, event_store, heuristic
 from app.services.geo import haversine_km
 
 logger = logging.getLogger(__name__)
@@ -92,6 +96,8 @@ def enrich(raw: dict) -> dict:
     risk = heuristic.score_risk(feats, cls["confidence"])
     event_store.record_cell(cell, raw["acq_epoch_ms"])
     persistence = event_store.persistence_for(cell, raw["acq_epoch_ms"])
+    detection_buffer.record(cell, raw["latitude"], raw["longitude"], raw["frp"],
+                            raw["bright_ti4"], raw["acq_epoch_ms"], raw["satellite"])
     return {
         "lat": raw["latitude"], "lon": raw["longitude"], "cell": cell,
         "frp": raw["frp"], "brightness_k": raw["bright_ti4"], "confidence": raw["confidence"],

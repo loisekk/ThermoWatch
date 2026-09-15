@@ -21,3 +21,6 @@ server/ingest/.env
 server/api/.env
 client/.env
 
+# local agent memory (not part of the product)
+memory-bank/
+

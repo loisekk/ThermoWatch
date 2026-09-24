@@ -252,3 +252,30 @@ sparse (`OSM SPARSE — rendering what exists`), unreachable OSM renders the lab
 `≈X m from OSM way NNN…(kind)` — the fire visibly hugs a real mapped building. Shadows
 (WebGL) only when buildings ≤ 400; ACES + sRGB + scene fog. Canvas parity is a labelled
 simplified subset.
+
+## Global Watch — the v2 command deck (Phase 4 home)
+
+The v2 home is a watch floor fed by a single query (`GET /v2/incidents?limit=200`, dismissed
+excluded, invalidated by the `/v2/stream` WebSocket through the shared `['incidents']` prefix):
+a live rail (LIVE OVERVIEW KPIs + risk-distribution bar + feed freshness, an INCIDENT TYPES
+donut over measured `top_class` counts, a RECENT INCIDENTS list keyed by `#TW-XXXX` codes), a
+full-bleed Canvas2D orthographic globe of the active feed, and the existing instrument-laden
+evidence dossier as a slide-over that leaves the globe animating behind it.
+
+Globe: bundled Natural Earth 110m landmass, 30° graticule, approximate day-side tint (visual
+only — never presented as sun geometry); high-risk events carry label chips (`REFINERY · HIGH`),
+pulse rings and a hover HUD; drag rotates, click selects, and any selection — rail or globe —
+flies the globe to that incident and holds it centered. Canvas2D on `setInterval`, so it paints
+on hosts where GL frames never present; `prefers-reduced-motion` freezes the clock (no idle
+drift, no pulses). Above the 200-row page cap the rail says so instead of implying a total.
+
+Risk levels are derived, never invented: escalated disposition or an `abnormal` assessment →
+HIGH · `insufficient_evidence` → MEDIUM · an assessed `normal` incident → LOW · nothing assessed
+→ UNKNOWN. Uncertainty is drawn amber, never green — the globe itself carries the abstention
+philosophy. Colors are console theme tokens, so the globe, the queue's disposition spines and
+the dossier's abstain banner agree.
+
+Keys: `O` opens the deck (now the landing view), `⇧O` keeps the old Overview slot, `Q` the
+analyst queue. Both workspaces share one selection (`useQueueStore.selectedIncidentId`), so a
+dossier opened from the globe is the same dossier the queue selects. Deep link: `?panel=w`.
+

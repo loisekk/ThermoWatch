@@ -38,10 +38,14 @@ def score_risk(f: dict, confidence: int) -> dict:
     score = round(100 * (0.4 * intensity + 0.25 * persistence + 0.2 * exposure + 0.15 * confidence / 100))
     level = "critical" if score >= 75 else "high" if score >= 55 else "moderate" if score >= 35 else "low"
     drivers: list[str] = []
-    if intensity > 0.45: drivers.append(f"FRP {round(f['frp'])} MW (elevated)")
-    if f["persist_days"] >= 5: drivers.append(f"{f['persist_days']}-day persistence (STA rule)")
-    if f.get("facility_hazard"): drivers.append(f"Proximity to {f['facility_hazard']} hazard facility")
-    if f["night_ratio"] > 0.4: drivers.append("Night-time detection (uncontrolled-burn indicator)")
+    if intensity > 0.45:
+        drivers.append(f"FRP {round(f['frp'])} MW (elevated)")
+    if f["persist_days"] >= 5:
+        drivers.append(f"{f['persist_days']}-day persistence (STA rule)")
+    if f.get("facility_hazard"):
+        drivers.append(f"Proximity to {f['facility_hazard']} hazard facility")
+    if f["night_ratio"] > 0.4:
+        drivers.append("Night-time detection (uncontrolled-burn indicator)")
     return {"score": score, "level": level, "drivers": drivers or ["No aggravating factors"]}
 
 

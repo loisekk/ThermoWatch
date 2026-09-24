@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 export type ViewMode = '2d' | '3d';
-export type PanelKey = 'overview' | 'persistence' | 'alerts' | 'facilities' | 'agent' | 'predict' | 'model' | 'analytics' | 'history' | 'news';
+export type PanelKey = 'global-watch' | 'queue' | 'overview' | 'persistence' | 'alerts' | 'facilities' | 'agent' | 'predict' | 'model' | 'analytics' | 'history' | 'news';
 
 /** Resizable-surface registry: [min, max, default] per key (Session 23). */
 export const PANEL_CLAMP: Record<string, [number, number, number]> = {
@@ -45,7 +45,7 @@ interface UIState {
 }
 
 export const useUIStore = create<UIState>()((set) => ({
-  viewMode: '2d', panel: 'overview', autoRotate: true, focus: null, sceneEventId: null,
+  viewMode: '2d', panel: 'global-watch', autoRotate: true, focus: null, sceneEventId: null,
   setViewMode: (viewMode) => set({ viewMode }),
   setPanel: (panel) => set({ panel }),
   toggleAutoRotate: () => set((s) => ({ autoRotate: !s.autoRotate })),

@@ -1,9 +1,11 @@
-import { Activity, Award, BarChart3, BellRing, Bot, BrainCircuit, Clock3, Factory, History, Radio } from 'lucide-react';
+import { Activity, AlertOctagon, Award, BarChart3, BellRing, Bot, BrainCircuit, Clock3, Factory, Globe2, History, Radio } from 'lucide-react';
 import { useUIStore, type PanelKey } from '@/store/useUIStore';
 import { cn } from '@/lib/utils/cn';
 
 const ITEMS: { key: PanelKey; icon: typeof Activity; label: string; hint: string }[] = [
-  { key: 'overview', icon: Activity, label: 'Overview', hint: 'O' },
+  { key: 'global-watch', icon: Globe2, label: 'Global Watch', hint: 'O' },
+  { key: 'queue', icon: AlertOctagon, label: 'Incident Queue', hint: 'Q' },
+  { key: 'overview', icon: Activity, label: 'Overview', hint: '⇧O' },
   { key: 'persistence', icon: History, label: 'Persistence', hint: 'P' },
   { key: 'alerts', icon: BellRing, label: 'Alerts', hint: 'A' },
   { key: 'facilities', icon: Factory, label: 'Facilities', hint: 'F' },

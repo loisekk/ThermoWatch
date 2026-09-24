@@ -1,8 +1,20 @@
-# ThermoWatch — SIH26162 (NTRO)
-Multi-class industrial fire classification + persistent thermal source intelligence.
+# ThermoWatch
+### SIH26162 · National Technical Research Organisation (NTRO)
+
+**Multi-class industrial fire classification + persistent thermal-source intelligence.**
 FIRMS + OSM + land-cover context · PyG spatio-temporal model · BYO-key AI agent · 2D/3D GIS console.
 
-Monorepo: `client/` (React console) · `server/api/` (FastAPI brain) · `server/ingest/` (Bun FIRMS worker).
+![React](https://img.shields.io/badge/client-React-61DAFB?logo=react&logoColor=white&labelColor=1a1a1a)
+![FastAPI](https://img.shields.io/badge/api-FastAPI-009688?logo=fastapi&logoColor=white&labelColor=1a1a1a)
+![Bun](https://img.shields.io/badge/ingest-Bun-f472b6?logo=bun&logoColor=white&labelColor=1a1a1a)
+![PyTorch Geometric](https://img.shields.io/badge/ML-PyTorch%20Geometric-ee4c2c?logo=pytorch&logoColor=white&labelColor=1a1a1a)
+
+<p align="center">
+  <img src="assets/ore-3d.png" alt="ThermoWatch 3D incident scene — facility massing, pulsing fire core, spread rings" width="49%" />
+  <img src="assets/ortho-2d.png" alt="ThermoWatch 2D orthographic GIS console" width="49%" />
+</p>
+
+**Monorepo:** `client/` (React console) · `server/api/` (FastAPI brain) · `server/ingest/` (Bun FIRMS worker).
 Each package manages its own dependencies (npm for client, bun for ingest, pip for api).
 
 ## Run (3 terminals)

@@ -10,6 +10,7 @@ import json
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 import joblib
 import numpy as np
@@ -62,7 +63,7 @@ def main() -> None:
         model.predict_proba(row.reshape(1, -1))
         t.append((time.perf_counter() - t0) * 1000)
 
-    report = {
+    report: dict[str, Any] = {
         "model": "tw-ensemble-v1",
         "trained_at": datetime.now(timezone.utc).isoformat(),
         "git_commit": None,

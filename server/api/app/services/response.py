@@ -4,12 +4,13 @@ ETA, resource table by class x hazard, NBC evacuation radius, and a downwind
 staging point. Deliberately no ML — TSG judges read this as decision support,
 and every number is explainable on stage."""
 import math
+from typing import Any
 
 from app.services.geo import haversine_km
 
 # Seed fire stations (India, near the demo's industrial belts). In production
 # this list is a config feed pulled from state fire-service directories.
-STATIONS = [
+STATIONS: list[dict[str, Any]] = [
     {"id": "S-001", "name": "Jamnagar Fire Station", "lat": 22.47, "lon": 70.07, "vehicles": 4, "personnel": 20},
     {"id": "S-002", "name": "Bathinda Fire Brigade", "lat": 30.20, "lon": 74.95, "vehicles": 3, "personnel": 15},
     {"id": "S-003", "name": "Haldia Fire Station", "lat": 22.04, "lon": 88.07, "vehicles": 5, "personnel": 25},

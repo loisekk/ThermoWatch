@@ -46,7 +46,7 @@ class MultiModalClassifier:
         self.ensemble.fit(X, y)
 
         labels = [int(c) for c in self.ensemble.classes_]
-        self.classes = labels
+        self.classes = [str(c) for c in labels]
         cv_scores = cross_val_score(self.ensemble.members[0], X, y, cv=cv, scoring="f1_macro") if cv > 1 else []
         rf = self.ensemble.members[0]
         importance = sorted(zip(self.feature_names, rf.feature_importances_), key=lambda kv: kv[1], reverse=True)

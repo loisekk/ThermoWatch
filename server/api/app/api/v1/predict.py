@@ -2,7 +2,7 @@ from fastapi import APIRouter
 
 from app.data.facilities import FACILITIES
 from app.ml import inference
-from app.schemas.fire import PredictRequest, PredictResponse
+from app.schemas.fire import ClassificationOut, PredictRequest, PredictResponse, RiskOut, SpreadRing
 from app.services import heuristic
 from app.services.geo import haversine_km
 
@@ -37,5 +37,11 @@ def predict(req: PredictRequest) -> PredictResponse:
         outer = rings[-1]["radius_km"] * 1.8
         affected = [f["name"] for f in FACILITIES
                     if haversine_km(req.lat, req.lon, f["lat"], f["lon"]) <= outer]
-    return PredictResponse(model=model_name, classification=cls, risk=risk, spread=rings, affected_facilities=affected)
+    return PredictResponse(
+        model=model_name,
+        classification=ClassificationOut.model_validate(cls),
+        risk=RiskOut.model_validate(risk),
+        spread=[SpreadRing.model_validate(r) for r in rings],
+        affected_facilities=affected,
+    )
 

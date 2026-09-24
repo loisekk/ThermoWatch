@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useUIStore, type PanelKey } from '@/store/useUIStore';
 
 const PANEL_MAP: Record<string, PanelKey> = {
-  o: 'overview', p: 'persistence', a: 'alerts', f: 'facilities', g: 'agent',
+  w: 'global-watch', o: 'overview', p: 'persistence', a: 'alerts', f: 'facilities', g: 'agent',
   m: 'predict', k: 'model', x: 'analytics', h: 'history', n: 'news',
 };
 

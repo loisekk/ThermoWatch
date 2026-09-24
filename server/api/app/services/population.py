@@ -43,7 +43,7 @@ class PopulationService:
         if hit and time.monotonic() - hit[0] < self.TTL_S:
             return hit[1]
         try:
-            params = {"lat": lat, "lon": lon, "dataset": "wpgp_2020"}
+            params: dict[str, str | float] = {"lat": lat, "lon": lon, "dataset": "wpgp_2020"}
             async with httpx.AsyncClient(timeout=self.TIMEOUT_S) as client:
                 response = await client.get(self.BASE_URL, params=params)
                 response.raise_for_status()

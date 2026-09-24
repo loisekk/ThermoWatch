@@ -35,7 +35,7 @@ if AVAILABLE:
             out, _ = self.lstm(h.reshape(t, n, -1))
             return torch.softmax(self.head(out[:, -1]), dim=-1)
 else:
-    class FireSTGNN:
+    class FireSTGNN:  # type: ignore[no-redef]
         """Stub raising a clear error if instantiated without torch/PyG.
 
         Mirrors the real class's inference surface (load_state_dict/eval/__call__)

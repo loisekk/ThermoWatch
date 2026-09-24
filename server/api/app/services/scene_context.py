@@ -12,10 +12,9 @@ Attribution is carried in every payload (OSM ODbL).
 from __future__ import annotations
 
 import re
-import time
 import threading
+import time
 from datetime import datetime, timezone
-from typing import Optional
 
 import httpx
 
@@ -84,8 +83,8 @@ def _dist2(lat: float, lon: float, p0: list) -> float:
 
 
 def _parse(body: dict, lat: float, lon: float) -> dict:
-    out = {"buildings": [], "trees": [], "roads": [],
-           "wood": [], "landuse": [], "water": []}
+    out: dict[str, list] = {"buildings": [], "trees": [], "roads": [],
+                            "wood": [], "landuse": [], "water": []}
     for el in body.get("elements", []):
         tags: dict = el.get("tags", {})
         if el.get("type") == "node" and tags.get("natural") == "tree":
@@ -141,7 +140,7 @@ def _to_doc(body: dict, lat: float, lon: float, radius_m: int) -> dict:
 
 async def get_context(lat: float, lon: float, radius_m: int = DEFAULT_RADIUS_M,
                       fresh: bool = False,
-                      client: Optional[httpx.AsyncClient] = None) -> dict:
+                      client: httpx.AsyncClient | None = None) -> dict:
     """-> cached/live OSM context doc. Never raises: total provider failure
     returns source "unavailable" so the scene degrades honestly, not blank."""
     key = (round(lat, 2), round(lon, 2), radius_m)
@@ -155,7 +154,7 @@ async def get_context(lat: float, lon: float, radius_m: int = DEFAULT_RADIUS_M,
     try:
         ql = _ql(lat, lon, radius_m)
         own = client is None
-        if own:
+        if client is None:
             client = httpx.AsyncClient(timeout=CLIENT_TIMEOUT_S,
                                        headers={"User-Agent": "ThermoWatch-SIH26162/1.0"})
         # Cycle the instance list twice: the public mirrors are flaky-transient

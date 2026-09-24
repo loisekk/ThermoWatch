@@ -22,7 +22,8 @@ def list_events(window_hours: int = Query(24, ge=1, le=24 * 30),
 @router.get("/events/{event_id}")
 def get_event(event_id: str):
     e = event_store.get(event_id)
-    if not e: raise HTTPException(404, "unknown event")
+    if not e:
+        raise HTTPException(404, "unknown event")
     return e
 
 @router.get("/events/{event_id}/detections")

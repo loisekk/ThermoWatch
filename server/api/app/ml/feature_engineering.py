@@ -78,7 +78,7 @@ class FeatureEngineer:
         self.landcover = landcover or landcover_service
 
     # ------------------------------------------------------------------ V1/V2
-    def _facility_features(self, features: dict[str, float], lat: float, lon: float) -> None:
+    def _facility_features(self, features: dict[str, Any], lat: float, lon: float) -> None:
         if not FACILITIES:
             features["facility_distance_km"] = None  # sentinel applied at encoding
             features["nearest_facility_type_enc"] = encode_subtype(None)

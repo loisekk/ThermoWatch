@@ -17,7 +17,7 @@ from app.core.config import settings
 _MAX_CELLS = 400
 _MAX_PER_CELL = 500
 _LOCK = threading.Lock()
-_BUFFERS: "OrderedDict[str, deque]" = OrderedDict()
+_BUFFERS: OrderedDict[str, deque] = OrderedDict()
 
 DAY_MS = 86_400_000
 

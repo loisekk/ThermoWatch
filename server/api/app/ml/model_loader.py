@@ -137,6 +137,14 @@ class LoadedModel:
         self.model = None
         self.provenance = f"unknown({type(obj).__name__})"
 
+    def _first_estimator(self) -> Any:
+        """Primary estimator of the loaded bundle (metadata autodetect source)."""
+        if isinstance(self.model, dict):
+            return next(iter(self.model.values()), None)
+        if hasattr(self.model, "steps"):  # sklearn Pipeline
+            return self.model.steps[-1][1]
+        return self.model
+
     def _autodetect_meta(self) -> None:
         est = self._first_estimator()
         if not self.classes and est is not None and hasattr(est, "classes_"):

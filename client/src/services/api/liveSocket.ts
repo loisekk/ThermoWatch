@@ -1,4 +1,4 @@
-import { API_BASE } from './client';
+import { WS_BASE } from './client';
 
 /** Live WS frame — server /ws/live taxonomy (fire:new, fire:classified,
  *  persistence:detected, alert:triggered, system:status). */
@@ -24,7 +24,7 @@ export function connectLive(h: LiveHandlers): () => void {
 
   const open = () => {
     if (closed) return;
-    ws = new WebSocket(`${API_BASE.replace(/^http/, 'ws')}/api/v1/ws/live`);
+    ws = new WebSocket(`${WS_BASE}/api/v1/ws/live`);
     ws.onopen = () => { retry = 1500; h.onStatus(true); };
     ws.onmessage = (m) => {
       try {

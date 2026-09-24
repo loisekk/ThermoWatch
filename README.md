@@ -10,8 +10,9 @@ FIRMS + OSM + land-cover context · PyG spatio-temporal model · BYO-key AI agen
 ![PyTorch Geometric](https://img.shields.io/badge/ML-PyTorch%20Geometric-ee4c2c?logo=pytorch&logoColor=white&labelColor=1a1a1a)
 
 <p align="center">
-  <img src="assets/ore-3d.png" alt="ThermoWatch 3D incident scene — facility massing, pulsing fire core, spread rings" width="49%" />
-  <img src="assets/ortho-2d.png" alt="ThermoWatch 2D orthographic GIS console" width="49%" />
+  <img src="assets/ore-3d.png" alt="ThermoWatch 3D incident scene — facility massing, pulsing fire core, spread rings" width="32%" />
+  <img src="assets/ortho-2d.png" alt="ThermoWatch 2D orthographic GIS console" width="32%" />
+  <img src="assets/osm.png" alt="ThermoWatch live OSM scene context — real buildings, trees, roads" width="32%" />
 </p>
 
 **Monorepo:** `client/` (React console) · `server/api/` (FastAPI brain) · `server/ingest/` (Bun FIRMS worker).

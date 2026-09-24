@@ -1,4 +1,11 @@
 {
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "https://thermowatch-api.onrender.com/api/$1" },
+    { "source": "/v2/stream", "destination": "https://thermowatch-api.onrender.com/v2/stream" },
+    { "source": "/v2/(.*)", "destination": "https://thermowatch-api.onrender.com/v2/$1" },
+    { "source": "/health", "destination": "https://thermowatch-api.onrender.com/health" },
+    { "source": "/health/(.*)", "destination": "https://thermowatch-api.onrender.com/health/$1" }
+  ],
   "headers": [
     {
       "source": "/(.*)",

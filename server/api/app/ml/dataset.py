@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import csv
 import random
+from typing import Any
 
 from app.data.facilities import FACILITIES
 from app.ml.features import CLASSES, feature_vector
@@ -88,7 +89,7 @@ def build_from_archive(csv_path: str) -> tuple[list[list[float]], list[int], dic
         st["frps"].append(float(r["frp"] or 0))
     X: list[list[float]] = []
     y: list[int] = []
-    prov = {"mode": "archive", "osm_specific": 0, "osm_generic": 0, "distance_natural": 0, "skipped_ambiguous": 0}
+    prov: dict[str, Any] = {"mode": "archive", "osm_specific": 0, "osm_generic": 0, "distance_natural": 0, "skipped_ambiguous": 0}
     for r in rows:
         lat, lon = float(r["latitude"]), float(r["longitude"])
         cell = f"{round(lat / 0.004)}:{round(lon / 0.004)}"
@@ -144,7 +145,9 @@ def split_stratified(X: list, y: list[int], ratios: tuple[float, float, float] =
     for idx in by.values():
         rng.shuffle(idx)
         a, b = int(len(idx) * ratios[0]), int(len(idx) * (ratios[0] + ratios[1]))
-        tr += idx[:a]; va += idx[a:b]; te += idx[b:]
+        tr += idx[:a]
+        va += idx[a:b]
+        te += idx[b:]
     for part in (tr, va, te):
         rng.shuffle(part)
     return tr, va, te

@@ -1,6 +1,16 @@
 from fastapi import APIRouter
 
-from app.api.v1 import events, history, ingest, ml_inference, model, news, predict, response, scene
+from app.api.v1 import (
+    events,
+    history,
+    ingest,
+    ml_inference,
+    model,
+    news,
+    predict,
+    response,
+    scene,
+)
 
 api_router = APIRouter()
 api_router.include_router(events.router, tags=["events"])

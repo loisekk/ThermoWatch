@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import zlib
+from enum import Enum
+
+from pydantic import BaseModel
 
 CLASSES = [
     "refinery", "steel", "gas_flare", "cement", "smelter",
@@ -42,9 +45,6 @@ def feature_vector(f: dict) -> list[float]:
 # serving it); the registry documents the expanded 46-feature contract and
 # multimodal_feature_vector() is its canonical encoder.
 # ---------------------------------------------------------------------------
-from enum import Enum
-
-from pydantic import BaseModel
 
 
 class FeatureSetVersion(str, Enum):

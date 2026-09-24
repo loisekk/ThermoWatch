@@ -13,9 +13,10 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Any, Iterable, Optional
+from typing import Any
 
 import httpx
 
@@ -91,11 +92,11 @@ class NewsItem:
     grade: str  # "event" | "geo-mention" | "article-country"
     title: str
     url: str
-    published_at: Optional[str]
-    lat: Optional[float] = None
-    lon: Optional[float] = None
-    country: Optional[str] = None
-    source_domain: Optional[str] = None
+    published_at: str | None
+    lat: float | None = None
+    lon: float | None = None
+    country: str | None = None
+    source_domain: str | None = None
     categories: list[str] = field(default_factory=list)
     matched_terms: list[str] = field(default_factory=list)
 
@@ -118,10 +119,10 @@ class ProviderStatus:
     provider: str
     ok: bool
     stale: bool
-    last_sync_at: Optional[str]
+    last_sync_at: str | None
     items: int
     latency_ms: int
-    error: Optional[str] = None
+    error: str | None = None
 
     def to_dict(self) -> dict:
         return self.__dict__
@@ -133,7 +134,7 @@ class _Cached:
     at: float = 0.0
     ok: bool = False
     latency_ms: int = 0
-    error: Optional[str] = None
+    error: str | None = None
 
 
 
@@ -316,10 +317,10 @@ async def _fetch_one(name: str, wh: int, bbox: str,
 
 
 async def fetch_all(window_hours: int = 24, bbox: str = "68,6,98,36",
-                    client: Optional[httpx.AsyncClient] = None):
+                    client: httpx.AsyncClient | None = None):
     """-> (statuses, items). Inject `client` in tests (httpx.MockTransport)."""
     own = client is None
-    if own:
+    if client is None:
         client = httpx.AsyncClient(timeout=TIMEOUT_S, headers={"User-Agent": UA},
                                    follow_redirects=True)
     try:

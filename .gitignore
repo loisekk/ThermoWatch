@@ -13,13 +13,43 @@ server/api/app/ml/models/*joblib*
 *.pem
 *.key
 .env.*
+# ...except the committed templates (env.example carries KEY NAMES ONLY,
+# never values). Without this negation `.env.*` silently swallows them.
+!.env.example
 .vscode/
 *.log
+
+# tool caches (local only)
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
 
 # secrets - never commit
 server/ingest/.env
 server/api/.env
 client/.env
+
+# scratch / tool output that embeds LOCAL ABSOLUTE PATHS (username leak vector).
+# Leading-underscore text files are scratch by convention in this repo
+# (_scan_*.txt, _audit_*.txt, _sql.txt, _pytest_full.txt, ...). All of it is
+# regenerable: keep it on disk, never in history.
+_*.txt
+*_now.txt
+*_final.txt
+mypy_*.txt
+ruff_*.txt
+pytest_*.txt
+phase0_status.txt
+_probe_*.py
+
+# research harness outputs (regenerable, timestamped per run)
+server/api/app/research/artifacts/
+server/api/app/research/datasets/
+server/api/app/research/results/
+
+# tool reports: regenerated on every run and stamped with the machine's
+# absolute artifacts path (model_benchmark.py writes str(artifacts_dir)).
+server/api/app/tools/reports/
 
 # local agent memory (not part of the product)
 memory-bank/

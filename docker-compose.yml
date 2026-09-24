@@ -1,14 +1,40 @@
 services:
+  db:
+    image: postgis/postgis:17-3.5-alpine
+    container_name: thermowatch-db
+    # Memory tuning is server-level (cannot be set per-DB via init script)
+    command: postgres -c shared_buffers=256MB -c effective_cache_size=1GB -c work_mem=16MB -c maintenance_work_mem=128MB
+    environment:
+      POSTGRES_DB: thermowatch
+      POSTGRES_USER: thermowatch
+      POSTGRES_PASSWORD: thermowatch_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U thermowatch -d thermowatch"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   api:
     build: ./server/api
     ports:
       - "8000:8000"
     environment:
       - TW_CORS_ORIGINS=http://localhost:5173
+      - TW_DATABASE_URL=postgresql+asyncpg://thermowatch:thermowatch_dev@db:5432/thermowatch
+      - TW_DB_REQUIRED=${TW_DB_REQUIRED:-0}
+      - FIRMS_API_KEY=${FIRMS_API_KEY:-}
     volumes:
       - ./server/api:/app
       - ./server/api/app/ml/models:/app/ml/models
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    depends_on:
+      db:
+        condition: service_healthy
 
   ingest:
     build: ./server/ingest
@@ -30,3 +56,8 @@ services:
       - ./client:/app
       - /app/node_modules
     command: npm run dev -- --host 0.0.0.0
+    depends_on:
+      - api
+
+volumes:
+  pgdata:

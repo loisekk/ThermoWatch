@@ -180,9 +180,25 @@ export function Map2DView() {
       map.getCanvas().style.cursor = 'pointer';
       const p = f.properties as Record<string, string | number>;
       hoverPopupRef.current ??= new maplibregl.Popup({ closeButton: false, offset: 10 });
+      // Built as DOM nodes, never setHTML(): feature properties originate in the
+      // API payload, and setHTML() routes them through MapLibre's HTML sanitizer
+      // (see GHSA-jrc7-96c5-q579 for the sanitizer-bypass class). textContent is
+      // never parsed as markup, so this popup is inert by construction.
+      const pop = document.createElement('div');
+      pop.className = 'map-pop';
+      const popClass = document.createElement('b');
+      popClass.textContent = String(
+        CLASS_META[p.cls as keyof typeof CLASS_META]?.label ?? p.cls,
+      );
+      pop.append(
+        popClass,
+        ` · risk ${p.risk}`,
+        document.createElement('br'),
+        `FRP ${p.frp} MW · ${p.pers === 1 ? 'persistent' : 'transient'}`,
+      );
       hoverPopupRef.current
         .setLngLat(e.lngLat)
-        .setHTML(`<div class="map-pop"><b>${CLASS_META[p.cls as keyof typeof CLASS_META]?.label ?? p.cls}</b> · risk ${p.risk}<br/>FRP ${p.frp} MW · ${p.pers === 1 ? 'persistent' : 'transient'}</div>`)
+        .setDOMContent(pop)
         .addTo(map);
     });
     map.on('mouseleave', 'fires-core', () => {

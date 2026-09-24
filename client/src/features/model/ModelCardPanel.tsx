@@ -4,7 +4,7 @@ import Chip from '@mui/material/Chip';
 import Paper from '@mui/material/Paper';
 import Skeleton from '@mui/material/Skeleton';
 import Typography from '@mui/material/Typography';
-import { api, API_BASE } from '@/services/api/client';
+import { api, API_BASE, API_TARGET } from '@/services/api/client';
 
 interface PerClass { precision: number; recall: number; f1: number; support: number }
 interface EvalReport {
@@ -27,9 +27,9 @@ export function ModelCardPanel() {
 
   if (err) return (
     <Alert severity="warning">
-      Backend unreachable at {API_BASE}.{' '}
-      {API_BASE.includes('localhost')
-        ? 'Start FastAPI (port 8000) or set VITE_API_URL.'
+      Backend unreachable at {API_TARGET}.{' '}
+      {!API_BASE || API_BASE.includes('localhost')
+        ? 'Start FastAPI on 127.0.0.1:8000 (dev proxy forwards to it) or set VITE_API_URL.'
         : 'Render instance may be waking — retrying; if this persists check TW_CORS_ORIGINS includes this site.'}
     </Alert>
   );

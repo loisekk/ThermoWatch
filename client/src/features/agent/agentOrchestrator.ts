@@ -1,6 +1,6 @@
 import { useAgentStore, type ChatMsg } from './agentStore';
 import { TOOL_DEFS, executeTool } from './tools';
-import { API_BASE, apiDiagnostic } from '@/services/api/client';
+import { API_TARGET, apiDiagnostic } from '@/services/api/client';
 import { useFireStore } from '@/store/useFireStore';
 import { computeKpis, topPersistent } from '@/selectors/fireSelectors';
 
@@ -31,7 +31,7 @@ export async function runAgent(userText: string): Promise<void> {
       if (!msg?.tool_calls?.length) {
         useAgentStore.getState().push({
           role: 'assistant',
-          content: msg?.content ?? `I couldn't reach the backend (${API_BASE}). ${apiDiagnostic()}. Fix: Vercel → Settings → Environment Variables → VITE_API_URL → Redeploy; or locally create client/.env.local with VITE_API_URL=https://thermowatch-api.onrender.com and restart npm run dev.`,
+          content: msg?.content ?? `I couldn't reach the backend via ${API_TARGET}. ${apiDiagnostic()}. Fix: Vercel → Settings → Environment Variables → VITE_API_URL → Redeploy; or locally run the API on 127.0.0.1:8000 (same-origin dev proxy) — restart npm run dev after any vite.config.ts change.`,
         });
         return;
       }

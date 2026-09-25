@@ -1,11 +1,17 @@
 """E10 — hard-case benchmark: production rule detector vs H1-H12 scenarios.
 
-The rule under test mirrors the production assessment rule
-(``app/services/assessment.py``): flag ABNORMAL when
+The rule under test is the production assessment rule
+(``app/services/assessment.py``) — flag ABNORMAL when
 
   - |intensity z| > ``settings.abnormal_z`` (log1p-FRP MAD z-score), or
-  - the detection is a new zone (more than ``settings.abnormal_new_zone_km``
-    from every learned zone).
+  - the detection is a new zone (beyond every learned zone's own extent plus
+    the observation's pixel half-diagonal plus ``settings.abnormal_new_zone_km``)
+
+EXTENDED with the sustained-shift arm under test (plan 4.2 / H5): a slow
+trajectory is invisible to a single-row intensity gate, so the windowed mean
+of the facility's last K observations is scored against the baseline
+(``sustained_shift_residual``). Every flag is attributed to the arm that
+produced it (``caught_by_arm``) — mechanism evidence, not just pass/fail.
 
 Facility normal states are built from normal-labelled history only: rows
 labelled abnormal (the injected H2-H5 anomalies) never train the state, and
@@ -15,19 +21,20 @@ sufficiency thresholds apply. Nothing here is tuned on the hard-case rows.
 
 Scenario expectations (scored, not tuned to pass):
   H1 normal persistent  -> false-alert rate low
-  H2 intensity spike    -> recall high (intensity gate)
-  H3 new zone           -> recall high (spatial gate)
-  H4 displacement       -> recall high (spatial gate)
-  H5 duration anomaly   -> recall moderate (sustained mild elevation)
+  H2 intensity spike    -> recall high (intensity arm)
+  H3 new zone           -> recall high (spatial arm)
+  H4 displacement       -> recall high (spatial arm; 1.5-4 km, detectable)
+  H5 duration anomaly   -> recall moderate (sustained arm carries it)
+  H6 natural near fac.  -> natural-fire rate reported (land cover + gated
+  H7 agri near facility     proximity; NO facility-type inheritance)
   H8 overlapping        -> association-level; reported for coverage only
   H9 sparse history     -> abstention rises when history is thinned
   H11 cold start        -> abstention near-total below sufficiency thresholds
   H12 regime shift      -> days-to-detection after a step change in FRP
 
-H6/H7 (natural/agri fire near a facility) and H10 (missing corroboration) are
-NOT row-level detector scenarios: H6/H7 need natural-fire rows this generator
-does not emit, and H10 is covered by E13 degradation plus the Phase-7
-external-evidence kill switch. They are reported as explicit gaps.
+H10 (missing corroboration) is NOT a row-level detector scenario: it is
+covered by the E13 degradation matrix plus the Phase-7 external-evidence kill
+switch, and is reported as an explicit gap.
 
 Usage:
     python -m app.research.e10_hard_cases --n-days 60
@@ -42,7 +49,13 @@ import pandas as pd
 
 from app.core.config import settings
 from app.ml.normal_state import FacilityNormalState, build_facility_normal_state
-from app.ml.residuals import intensity_residual, spatial_residual
+from app.ml.residuals import (
+    SUSTAINED_WINDOW,
+    SUSTAINED_Z,
+    intensity_residual,
+    spatial_residual,
+    sustained_shift_residual,
+)
 from app.research.config import DATASET_SCHEMA_VERSION, MODEL_SEED
 from app.research.dataset import create_dataset_manifest
 from app.research.hard_cases import HARD_CASE_DESCRIPTIONS, generate_hard_case_dataset
@@ -83,19 +96,126 @@ def _build_states(history: pd.DataFrame) -> dict[str, FacilityNormalState]:
     return states
 
 
+DETECTOR_ARMS = ("intensity", "spatial_new_zone", "sustained_shift")
+
+
 def _rule_flag(
     frp: float, lat: float, lon: float, state: FacilityNormalState,
-) -> tuple[bool, float | None, float | None]:
-    """Production rule: intensity gate OR new-zone gate -> flag."""
-    res_i = intensity_residual(frp, state)
+    hour: int | None = None,
+    scan_km: float | None = None,
+    track_km: float | None = None,
+    window: list[float] | None = None,
+) -> tuple[bool, str | None, float | None, float | None]:
+    """Rule with mechanism attribution: (flag, arm, intensity_z, nearest_km).
+
+    Arms are evaluated in a fixed order and the FIRST firing arm is recorded,
+    so ``caught_by_arm`` counts sum to the number of flagged rows.
+    """
+    is_night = None if hour is None else (hour < 6 or hour >= 18)
+    extra = {}
+    if scan_km is not None and track_km is not None:
+        extra = {"obs_scan_km": scan_km, "obs_track_km": track_km}
+    res_i = intensity_residual(frp, state, hour=hour, is_night=is_night)
     res_s = spatial_residual(
-        lat, lon, state, new_zone_km=settings.abnormal_new_zone_km
+        lat, lon, state, new_zone_km=settings.abnormal_new_zone_km, **extra
     )
-    flagged = (
-        (res_i.z is not None and abs(res_i.z) > settings.abnormal_z)
-        or res_s.is_new_zone
-    )
-    return flagged, res_i.z, res_s.nearest_zone_km
+    res_sus = sustained_shift_residual(window or [], state, is_night=is_night)
+
+    arm: str | None = None
+    if res_i.z is not None and abs(res_i.z) > settings.abnormal_z:
+        arm = "intensity"
+    elif res_s.is_new_zone:
+        arm = "spatial_new_zone"
+    elif res_sus.z is not None and abs(res_sus.z) > SUSTAINED_Z:
+        arm = "sustained_shift"
+    return arm is not None, arm, res_i.z, res_s.nearest_zone_km
+
+
+def _history_windows(
+    history: pd.DataFrame, window_size: int = SUSTAINED_WINDOW
+) -> dict[str, list[float]]:
+    """Last ``window_size`` log1p(FRP) per facility, in time order.
+
+    Seeds the rolling window so the sustained arm is causal from the first
+    evaluation row: nothing after the cutoff is ever used.
+    """
+    windows: dict[str, list[float]] = {}
+    hist = history[history["facility_id"] != ""].sort_values("observed_at")
+    for r in hist.itertuples():
+        w = windows.setdefault(str(r.facility_id), [])
+        w.append(float(np.log1p(max(float(cast(float, r.frp)), 0.0))))
+        del w[:-window_size]
+    return windows
+
+
+def _rolling_windows(
+    rows: pd.DataFrame, seed_windows: dict[str, list[float]] | None,
+    window_size: int = SUSTAINED_WINDOW,
+) -> dict[int, list[float]]:
+    """Per-row window (last K observations ENDING AT the row) keyed by position.
+
+    Rows are walked in chronological order per facility, but the returned map
+    is keyed by the row's position in ``rows`` so callers keep their own
+    order (``final_gates`` pairs predictions to ``eval_rows`` positionally).
+    """
+    windows = {k: list(v) for k, v in (seed_windows or {}).items()}
+    out: dict[int, list[float]] = {}
+    if rows.empty:
+        return out
+    order = np.argsort(rows["observed_at"].to_numpy(), kind="stable")
+    for pos in order:
+        row = rows.iloc[int(pos)]
+        fid = str(row["facility_id"])
+        w = windows.setdefault(fid, [])
+        w.append(float(np.log1p(max(float(cast(float, row["frp"])), 0.0))))
+        del w[:-window_size]
+        out[int(pos)] = list(w)
+    return out
+
+
+def _detect_rows(
+    rows: pd.DataFrame, states: dict, seed_windows: dict[str, list[float]] | None = None,
+) -> list[dict]:
+    """One causal pass over ``rows``: prediction + firing arm per row.
+
+    An abstention means the facility normal state is missing or below the
+    production sufficiency thresholds — never a silent NORMAL.
+    """
+    windows = _rolling_windows(rows, seed_windows)
+    records: list[dict] = []
+    for pos, r in enumerate(rows.itertuples()):
+        state = states.get(str(r.facility_id))
+        z: float | None = None
+        nearest: float | None = None
+        arm: str | None = None
+        if state is None or not state.sufficient:
+            pred = "abstain"
+        else:
+            flag, arm, z, nearest = _rule_flag(
+                cast(float, r.frp),
+                cast(float, r.latitude),
+                cast(float, r.longitude),
+                state,
+                hour=getattr(r.observed_at, "hour", None),
+                scan_km=getattr(r, "scan", None),
+                track_km=getattr(r, "track", None),
+                window=windows.get(pos),
+            )
+            pred = "abnormal" if flag else "normal"
+            if not flag:
+                arm = None
+        records.append({
+            "hard_case_id": str(r.hard_case_id),
+            "facility_id": str(r.facility_id),
+            "observed_at": r.observed_at,
+            "label_normality": str(r.label_normality),
+            "frp": float(cast(float, r.frp)),
+            "prediction": pred,
+            "arm": arm,
+            "intensity_z": z,
+            "nearest_zone_km": nearest,
+        })
+    return records
 
 
 # =====================================================================
@@ -109,11 +229,13 @@ REGIME_SHIFT_FACTOR = 2.5  # H12: step multiplier applied after the shift point
 # Normal-tagged rows that would otherwise self-score (they trained the state)
 # get cut off to the held-out tail. H8 is coverage-only (no gate, no false-alert
 # bar) so all its rows are scored regardless of cutoff.
-NORMAL_TAGS = {"H1_normal_persistent"}
+NORMAL_TAGS = {"H1_normal_persistent", "H6_natural_near_facility",
+               "H7_agri_near_facility"}
 
 SCENARIO_ORDER = [
     "H1_normal_persistent", "H2_intensity_spike", "H3_new_zone",
-    "H4_displacement", "H5_duration_anomaly", "H8_overlapping",
+    "H4_displacement", "H5_duration_anomaly", "H6_natural_near_facility",
+    "H7_agri_near_facility", "H8_overlapping",
 ]
 
 
@@ -126,43 +248,23 @@ def _split_history(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.Tim
     return history, eval_all, cutoff
 
 
-def _score_rows(rows: pd.DataFrame, states: dict) -> tuple[dict, list[dict]]:
-    """Apply the production rule per row; abstain when the state is unusable.
+def _score_rows(
+    rows: pd.DataFrame, states: dict,
+    seed_windows: dict[str, list[float]] | None = None,
+) -> tuple[dict, list[dict]]:
+    """Apply the rule per row; abstain when the state is unusable.
 
-    An abstention means the facility normal state is missing or below the
-    production sufficiency thresholds — never a silent NORMAL.
+    Records keep the INPUT row order (callers pair them positionally).
     """
-    summary = {"n": len(rows), "flagged": 0, "abstained": 0, "normal": 0}
-    records: list[dict] = []
-    for r in rows.itertuples():
-        state = states.get(str(r.facility_id))
-        z: float | None = None
-        nearest: float | None = None
-        if state is None or not state.sufficient:
-            pred = "abstain"
+    records = _detect_rows(rows, states, seed_windows)
+    summary = {"n": len(records), "flagged": 0, "abstained": 0, "normal": 0}
+    for rec in records:
+        if rec["prediction"] == "abstain":
             summary["abstained"] += 1
+        elif rec["prediction"] == "abnormal":
+            summary["flagged"] += 1
         else:
-            flag, z, nearest = _rule_flag(
-                cast(float, r.frp),
-                cast(float, r.latitude),
-                cast(float, r.longitude),
-                state,
-            )
-            pred = "abnormal" if flag else "normal"
-            if flag:
-                summary["flagged"] += 1
-            else:
-                summary["normal"] += 1
-        records.append({
-            "hard_case_id": str(r.hard_case_id),
-            "facility_id": str(r.facility_id),
-            "observed_at": r.observed_at,
-            "label_normality": str(r.label_normality),
-            "frp": float(cast(float, r.frp)),
-            "prediction": pred,
-            "intensity_z": z,
-            "nearest_zone_km": nearest,
-        })
+            summary["normal"] += 1
     return summary, records
 
 
@@ -178,37 +280,72 @@ def _abstain_rate(summary: dict) -> float | None:
     return summary["abstained"] / summary["n"]
 
 
-def _attribute_flags(rows: pd.DataFrame, states: dict) -> dict:
-    """Split the fire rate by gate half: intensity vs spatial.
+def _attribute_flags(
+    rows: pd.DataFrame, states: dict,
+    seed_windows: dict[str, list[float]] | None = None,
+) -> dict:
+    """Split the flag rate by ARM: intensity vs spatial vs sustained.
 
-    Shows *which* half of the production rule (|z| gate or new-zone gate)
-    produced a scenario's flags — essential for interpreting gate failures.
+    Shows *which* part of the rule produced a scenario's flags — essential for
+    reading a gate failure (or a gate PASS) as mechanism evidence rather than
+    a bare number. ``caught_by_arm`` counts sum to the flagged total because
+    the detector records the FIRST firing arm per row.
     """
-    n = i_fire = s_fire = 0
+    records = _detect_rows(rows, states, seed_windows)
+    scored = [r for r in records if r["prediction"] != "abstain"]
+    if not scored:
+        return {"n_scored": 0,
+                "caught_by_arm": {arm: 0 for arm in DETECTOR_ARMS}}
+
+    arm_counts = {arm: 0 for arm in DETECTOR_ARMS}
     nearest: list[float] = []
-    for r in rows.itertuples():
-        state = states.get(str(r.facility_id))
-        if state is None or not state.sufficient:
-            continue
-        n += 1
-        ri = intensity_residual(float(str(r.frp)), state)
-        rs = spatial_residual(
-            float(str(r.latitude)), float(str(r.longitude)), state,
-            new_zone_km=settings.abnormal_new_zone_km,
-        )
-        if ri.z is not None and abs(ri.z) > settings.abnormal_z:
-            i_fire += 1
-        if rs.is_new_zone:
-            s_fire += 1
-        if rs.nearest_zone_km is not None:
-            nearest.append(rs.nearest_zone_km)
-    if n == 0:
-        return {"n_scored": 0}
+    for rec in scored:
+        if rec["arm"] in arm_counts:
+            arm_counts[rec["arm"]] += 1
+        if rec["nearest_zone_km"] is not None:
+            nearest.append(float(rec["nearest_zone_km"]))
+
+    n = len(scored)
     return {
         "n_scored": n,
-        "intensity_fire_rate": i_fire / n,
-        "spatial_fire_rate": s_fire / n,
+        "intensity_fire_rate": arm_counts["intensity"] / n,
+        "spatial_fire_rate": arm_counts["spatial_new_zone"] / n,
+        "sustained_fire_rate": arm_counts["sustained_shift"] / n,
+        "caught_by_arm": arm_counts,
+        "caught_by_arm_rate": {k: v / n for k, v in arm_counts.items()},
         "median_nearest_zone_km": float(np.median(nearest)) if nearest else None,
+    }
+
+
+def _natural_fire_feature_audit(rows: pd.DataFrame) -> dict:
+    """H6/H7 feature-level evidence (plan 4.7): natural fire stays natural.
+
+    A natural fire near a facility must present as natural fire: non-industrial
+    land cover AND no facility-type one-hot. The pre-fix B1 features gave a
+    wildfire 3 km from a refinery ``near_refinery=1`` because the one-hot was
+    keyed on the NEAREST facility with no distance gate, so the row inherited
+    the facility's class. This is a feature-column audit, not a retrained
+    classifier — no model is fit or tuned on these rows.
+    """
+    from app.research.baselines import extract_b1_features, get_facility_coords
+
+    if rows.empty:
+        return {"n_rows": 0, "natural_fire_rate": None,
+                "facility_type_inheritance_rate": None}
+    feats = extract_b1_features(rows.reset_index(drop=True), get_facility_coords())
+    near_cols = [c for c in feats.columns
+                 if c.startswith("near_") and c != "near_facility"]
+    inherited = (feats[near_cols].to_numpy() == 1).any(axis=1)
+    landcover = rows.reset_index(drop=True)["landcover"].astype(str).to_numpy()
+    non_industrial = np.isin(landcover, ["forest", "agriculture"])
+    natural = (~inherited) & non_industrial
+    return {
+        "n_rows": int(len(feats)),
+        "natural_fire_rate": float(natural.mean()),
+        "facility_type_inheritance_rate": float(inherited.mean()),
+        "n_near_facility_within_2km": int(feats["near_facility"].sum()),
+        "note": "feature-level audit of land cover + distance-gated proximity; "
+                "no classifier retrained on these rows",
     }
 
 
@@ -251,15 +388,18 @@ def build_metrics(
     eval_fac = eval_all[eval_all["facility_id"] != ""]
     scenarios: dict[str, dict] = {}
     prediction_frames: list[pd.DataFrame] = []
+    # Causal seeds for the sustained arm: the facility's last K log-FRPs from
+    # history only (never eval rows, never the future).
+    seed_windows = _history_windows(history)
 
-    # --- H1-H5, H8: row-tagged scenarios scored against the same states ---
+    # --- H1-H8: row-tagged scenarios scored against the same states ---
     for tag in SCENARIO_ORDER:
         rows = df[df["hard_case_id"] == tag]
         if tag in NORMAL_TAGS:
             # Normal-tagged rows also appear in training history; score only
             # the held-out tail so the false-alert bar means anything.
             rows = rows[rows["observed_at"] >= cutoff]
-        summary, records = _score_rows(rows, states)
+        summary, records = _score_rows(rows, states, seed_windows)
         entry = {
             "description": HARD_CASE_DESCRIPTIONS.get(tag, ""),
             "n_rows": summary["n"],
@@ -268,12 +408,26 @@ def build_metrics(
             "n_normal": summary["normal"],
             "flagged_rate": _rate(summary),
             "abstain_rate": _abstain_rate(summary),
-            "flag_attribution": _attribute_flags(rows, states),
+            "flag_attribution": _attribute_flags(rows, states, seed_windows),
         }
         if tag == "H1_normal_persistent":
             entry["expectation"] = "false-alert rate stays low"
             entry["metric"] = "false_alert_rate"
             entry["value"] = entry["flagged_rate"]
+        elif tag in ("H6_natural_near_facility", "H7_agri_near_facility"):
+            entry["expectation"] = ("natural fire near a facility stays natural "
+                                    "(land cover + gated proximity)")
+            entry["metric"] = "natural_fire_rate"
+            entry["feature_audit"] = _natural_fire_feature_audit(rows)
+            entry["value"] = entry["feature_audit"]["natural_fire_rate"]
+            entry["detector_flagged_rate"] = entry["flagged_rate"]
+            entry["attribution_note"] = (
+                "rows are force-attributed to the nearby facility so the "
+                "detector/classifier path can be exercised; production "
+                "association only links detections within 2 km, which these "
+                "rows deliberately exceed"
+            )
+            entry["gated"] = False
         elif tag == "H8_overlapping":
             entry["expectation"] = "association-level; coverage only (no gate)"
             entry["metric"] = "coverage_flagged_rate"
@@ -293,8 +447,8 @@ def build_metrics(
     keep_days = set(uniq_days[::SPARSE_KEEP_EVERY])
     sparse_hist = history[history["observed_at"].dt.normalize().isin(keep_days)]
     sparse_states = _build_states(sparse_hist)
-    base_sum, _ = _score_rows(eval_fac, states)
-    sparse_sum, _ = _score_rows(eval_fac, sparse_states)
+    base_sum, _ = _score_rows(eval_fac, states, seed_windows)
+    sparse_sum, _ = _score_rows(eval_fac, sparse_states, _history_windows(sparse_hist))
     base_abstain = _abstain_rate(base_sum) or 0.0
     sparse_abstain = _abstain_rate(sparse_sum)
     scenarios["H9_sparse"] = {
@@ -320,7 +474,7 @@ def build_metrics(
     cold_days = set(uniq_days[:COLD_START_DAYS])
     cold_hist = history[history["observed_at"].dt.normalize().isin(cold_days)]
     cold_states = _build_states(cold_hist)
-    cold_sum, _ = _score_rows(eval_fac, cold_states)
+    cold_sum, _ = _score_rows(eval_fac, cold_states, _history_windows(cold_hist))
     scenarios["H11_cold_start"] = {
         "description": HARD_CASE_DESCRIPTIONS["H11_cold_start"],
         "expectation": "abstention near-total below sufficiency thresholds",
@@ -350,7 +504,7 @@ def build_metrics(
         shift_ts = rows["observed_at"].iloc[len(rows) // 2]
         boosted = rows[rows["observed_at"] >= shift_ts].copy()
         boosted["frp"] = (boosted["frp"] * REGIME_SHIFT_FACTOR).round(2)
-        summary, records = _score_rows(boosted, {fid: state})
+        summary, records = _score_rows(boosted, {fid: state}, seed_windows)
         flag_times = [r["observed_at"] for r in records if r["prediction"] == "abnormal"]
         days = _day_to_detection(flag_times, shift_ts)
         if days is not None:
@@ -395,18 +549,6 @@ def build_metrics(
 
     # --- Explicit gaps: scenarios this generator cannot express as rows ---
     documented_gaps = {
-        "H6_natural_near_facility": {
-            "description": HARD_CASE_DESCRIPTIONS["H6_natural_near_facility"],
-            "status": "documented_gap",
-            "reason": "requires natural-fire rows this generator does not emit; "
-                      "context discrimination is covered by E02/E13 instead.",
-        },
-        "H7_agri_near_facility": {
-            "description": HARD_CASE_DESCRIPTIONS["H7_agri_near_facility"],
-            "status": "documented_gap",
-            "reason": "requires agricultural-burn rows this generator does not "
-                      "emit; land-cover robustness is untested at row level.",
-        },
         "H10_missing_corroboration": {
             "description": HARD_CASE_DESCRIPTIONS["H10_missing_corroboration"],
             "status": "documented_gap",
@@ -492,15 +634,35 @@ def _conclusion(metrics: dict) -> str:
                     else "no zones learned (spatial gate inert by contract)"
                 )
                 lines.append(
-                    f"  - intensity gate fires on {a['intensity_fire_rate']:.3f} "
-                    f"of scored rows, spatial gate on {a['spatial_fire_rate']:.3f}; "
-                    f"median distance to nearest learned zone {med_txt} vs new-zone "
-                    f"gate {metrics['rule_config']['abnormal_new_zone_km']} km."
+                    f"  - arm fire rates: intensity "
+                    f"{a['intensity_fire_rate']:.3f}, spatial "
+                    f"{a['spatial_fire_rate']:.3f}, sustained "
+                    f"{a.get('sustained_fire_rate', 0.0):.3f}; "
+                    f"median distance to nearest learned zone {med_txt} vs "
+                    f"new-zone margin "
+                    f"{metrics['rule_config']['abnormal_new_zone_km']} km "
+                    f"(tolerance = zone extent + pixel half-diagonal + margin)."
                 )
         lines.append("")
         lines.append(
             "Failures are reported as measured — thresholds and gates are "
             "pre-registered and are not re-tuned to pass."
+        )
+
+    lines += ["", "### Per-scenario arm attribution (mechanism evidence)", "",
+              "Flags are attributed to the FIRST firing arm, so the counts sum "
+              "to the flagged total. This is how a gate move is shown to come "
+              "from the intended mechanism.", "",
+              "| Scenario | caught_by_arm (intensity / spatial / sustained) | "
+              "n_scored |", "|---|---|---|"]
+    for tag, s in metrics["scenarios"].items():
+        arm = s.get("flag_attribution", {}).get("caught_by_arm")
+        if not arm:
+            continue
+        lines.append(
+            f"| {tag} | {arm['intensity']} / {arm['spatial_new_zone']} / "
+            f"{arm['sustained_shift']} | "
+            f"{s['flag_attribution']['n_scored']} |"
         )
 
     lines += ["", "### Documented gaps (honest omissions)", ""]
@@ -509,8 +671,14 @@ def _conclusion(metrics: dict) -> str:
     lines += ["", "### Interpretation", "",
               "- States are built from normal history BEFORE the temporal cutoff; "
               "normal-tagged scenarios are scored only after it (no self-scoring).",
-              "- Recall = fraction of scenario rows the production rule flags; "
+              "- Recall = fraction of scenario rows the rule flags; "
               "abstentions count against recall, never in favor of it.",
+              "- H6/H7 rows are force-attributed to the nearby facility so the "
+              "detector/classifier path can be exercised; production association "
+              "only links detections within 2 km, which these rows deliberately "
+              "exceed. The reported natural_fire_rate is a FEATURE-COLUMN audit "
+              "(land cover + distance-gated near_* one-hots); no classifier is "
+              "retrained or tuned on these rows.",
               "- H9/H11 report abstention under thinned/cold-start history — "
               "abstaining is the safe answer when history is inadequate.",
               "- H12 reports whole days from a 2.5x FRP step change to the first "
@@ -519,10 +687,15 @@ def _conclusion(metrics: dict) -> str:
               "detections into incidents first (median position, >=2 observations "
               "per incident), so spatial-gate rates here characterize the raw gate "
               "rather than end-to-end incident decisions.",
-              "- The synthetic generator adds coordinate jitter on the order of "
-              "scan/4*0.3 degrees (multi-kilometre); where the spatial gate "
-              "dominates failures, jitter vs the 1.5 km new-zone threshold is the "
-              "first thing to recalibrate — reported, not tuned away here.",
+              "- Generator and detector share ONE observation-uncertainty model "
+              "(`app/ml/observation_uncertainty.py`): detections scatter within "
+              "their pixel (sigma = half-extent/sqrt(12), scan/track in km), and "
+              "the new-zone gate grants zone extent + the observation's own pixel "
+              "half-diagonal + the configured margin. The pre-fix mismatch "
+              "(scan km used as degrees) is the mechanism the 2026-09-25 run "
+              "recorded as the dominant false-alert source.",
+              "- The sustained arm reads only past observations (history seed + "
+              "the current row); the baseline state excludes the eval window.",
               "",
               "Note: Results are on SYNTHETIC hard-case rows — harness validation "
               "only, not real-world performance claims."]

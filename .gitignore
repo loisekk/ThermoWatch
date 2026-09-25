@@ -54,3 +54,6 @@ server/api/app/tools/reports/
 # local agent memory (not part of the product)
 memory-bank/
 
+
+.vercel
+.env*

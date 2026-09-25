@@ -50,3 +50,26 @@ def test_topology_change_frozen_api():
     ch = topology_change(state, [])
     assert ch.n_new_zones == 0
     assert not ch.changed
+
+
+def test_geographic_gates_md_renders_gate_table_and_support():
+    """The E02 geographic conclusion must print every gate + the R4 support
+    table — that is what turns 'INVALID' into a documented verdict."""
+    from app.research.e02_normality_matrix import _geographic_gates_md
+
+    manifest = {
+        "lon_split": 78.0, "buffer_km": 50.0, "dropped_in_buffer": 12,
+        "dropped_straddling": ["event:EV-1", "event:EV-2"],
+        "gates": {
+            "R1_disjoint": "PASS", "R2_buffer": "PASS",
+            "R3_no_straddle": "PASS",
+            "R4_support_status": "INSUFFICIENT",
+            "R4_support": {"refinery": [400, 0], "steel": [120, 90]},
+            "R4_missing_on_one_side": ["refinery"],
+        },
+    }
+    md = _geographic_gates_md(manifest)
+    for needle in ("R1 disjoint groups", "R2 buffer", "R3 no straddling",
+                   "R4 class support", "| refinery | 400 | 0 |",
+                   "Documented insufficiency"):
+        assert needle in md, f"missing from gates section: {needle}"

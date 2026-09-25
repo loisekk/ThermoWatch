@@ -242,10 +242,16 @@ async def assess_incident(session: AsyncSession, incident_id) -> Assessment | No
     res_spa: SpatialResidual | None = None
     res_tmp: TemporalResidual | None = None
     if state:
-        res_int = intensity_residual(med_obs.frp or 0.0, state)
+        res_int = intensity_residual(
+            med_obs.frp or 0.0, state, hour=med_obs.observed_at.hour,
+        )
         res_spa = spatial_residual(
             med_obs.latitude, med_obs.longitude, state,
             settings.abnormal_new_zone_km,
+            # The gate's tolerance includes THIS observation's pixel
+            # half-diagonal (plan 4.1) — FIRMS scan/track are km.
+            obs_scan_km=float(med_obs.scan),
+            obs_track_km=float(med_obs.track),
         )
         res_tmp = temporal_residual(med_obs.observed_at.hour, None, state)
 

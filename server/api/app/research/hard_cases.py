@@ -9,6 +9,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from app.ml.observation_uncertainty import km_to_deg_lat
 from app.research.dataset import FACILITY_PROFILES, FACILITY_REGISTRY, _make_observation
 
 
@@ -47,7 +48,9 @@ def generate_hard_case_dataset(seed: int = 123, n_days: int = 60) -> pd.DataFram
     df = _apply_h3_new_zone(df, rng)
     df = _apply_h4_displacement(df, rng)
     df = _apply_h5_duration_anomaly(df, rng)
-    # H6-H7 require natural/agri fire proximity — evaluated as data conditions
+    # H6/H7 are real rows now (plan section 5): natural/agri fire ~3 km from a
+    # facility, tagged so they flow through the SAME detector/classifier path.
+    df = _apply_h6_h7(df, rng)
     df = _apply_h8_overlapping(df, rng)
     # H9-H11 are data-condition scenarios (applied at evaluation, not generation)
     # H12 is a regime shift
@@ -110,7 +113,13 @@ def _apply_h3_new_zone(df, rng):
 
 
 def _apply_h4_displacement(df, rng):
-    """H4: Thermal activity shifts away from learned zone — should be ABNORMAL."""
+    """H4: Thermal activity shifts away from learned zone — should be ABNORMAL.
+
+    The shift must be physically DETECTABLE: a 500 m move is sub-pixel for
+    both VIIRS (~375 m) and MODIS (~1 km), so the old range tested physics
+    the mission cannot deliver. 1.5-4.0 km is a genuinely different unit
+    inside a large facility, and 2x that in true displacement (both axes).
+    """
     facility_ids = [f for f in df["facility_id"].unique() if f]
     for fid in facility_ids[10:14]:
         mask = (df["facility_id"] == fid) & (df["label_normality"] == "normal")
@@ -119,7 +128,7 @@ def _apply_h4_displacement(df, rng):
             continue
         shift_start = int(rng.integers(len(idx) // 2, len(idx) - 5))
         displaced = idx[shift_start:shift_start + 5]
-        shift = float(rng.uniform(0.02, 0.04))
+        shift = km_to_deg_lat(float(rng.uniform(1.5, 4.0)))  # km -> degrees
         df.loc[displaced, "latitude"] = (df.loc[displaced, "latitude"] + shift).round(6)
         df.loc[displaced, "longitude"] = (df.loc[displaced, "longitude"] + shift).round(6)
         df.loc[displaced, "label_normality"] = "abnormal"
@@ -145,13 +154,63 @@ def _apply_h5_duration_anomaly(df, rng):
     return df
 
 
+def _apply_h6_h7(df, rng):
+    """H6/H7: natural fire / agricultural burn ~3 km from a real facility.
+
+    Generated INTO the tagged dataframe (plan section 5 — "not optional
+    nice-to-have") so they flow through the SAME detector and classifier
+    path as every other case. A wildfire inside a facility's influence area
+    must be explained by land cover + distance-gated proximity, never by
+    inheriting the facility's type.
+
+    Placement: 5 days before the end of the window, i.e. AFTER the 60%
+    temporal cutoff, so the rows are scored, never trained on. The row keeps
+    the nearby facility's id (a 3 km unattributed row would abstain and the
+    case would be untestable); in production, association only links
+    detections within 2 km, which this case deliberately exceeds.
+    """
+    facility_ids = sorted(f for f in df["facility_id"].unique() if f)
+    new_rows: list[dict] = []
+    for i, fid in enumerate(facility_ids[:6]):
+        base = df[df["facility_id"] == fid]
+        if base.empty:
+            continue
+        lat = float(base["latitude"].mode().iloc[0])
+        lon = float(base["longitude"].mode().iloc[0])
+        landcover, tag = (("forest", "H6_natural_near_facility") if i % 2 == 0
+                          else ("agriculture", "H7_agri_near_facility"))
+        frp_mu = 4.4 if i % 2 == 0 else 2.9
+        day = base["observed_at"].max() - pd.Timedelta(days=5)
+        for d in range(3):
+            for _ in range(3):
+                new_row = _make_observation(
+                    rng, len(df) + len(new_rows) + 1, fid, "",
+                    lat + km_to_deg_lat(3.0) + rng.normal(0, 0.004),
+                    lon + km_to_deg_lat(3.0) + rng.normal(0, 0.004),
+                    day + pd.Timedelta(days=d), 13,
+                    float(np.exp(rng.normal(frp_mu, 0.8))),
+                    landcover=landcover, is_natural=True,
+                    event_id=f"{tag}-{fid}",
+                    label_override="natural_fire", normality="normal",
+                )
+                new_row["hard_case_id"] = tag
+                new_rows.append(new_row)
+    if not new_rows:
+        return df
+    return pd.concat([df, pd.DataFrame(new_rows)], ignore_index=True)
+
+
 def _apply_h8_overlapping(df, rng):
     """H8: Multiple sources overlapping spatially — tests association."""
     fac1 = FACILITY_REGISTRY[0]  # Jamnagar refinery
     fac2 = FACILITY_REGISTRY[1]  # Reliance SEZ refinery (~25 km away)
     if abs(fac1.latitude - fac2.latitude) < 0.5:
-        # Overlapping — tag a sample as H8
-        mask = df["facility_id"].isin([fac1.facility_id, fac2.facility_id])
+        # Overlapping — tag a sample as H8. Pre-existing semantics: H8 rows are
+        # a subset of the H1 facility rows (coverage-only scenario, no gate).
+        # Natural-fire rows tagged H6/H7 are excluded so this cannot relabel a
+        # case that was just generated.
+        mask = (df["facility_id"].isin([fac1.facility_id, fac2.facility_id])
+                & ~df["is_natural_fire"].astype(bool))
         sample_idx = df.index[mask][:10]
         df.loc[sample_idx, "hard_case_id"] = "H8_overlapping"
     return df

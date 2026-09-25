@@ -57,9 +57,12 @@ def run_data_efficiency(
         cutoff_date = (pd.Timestamp(test_start) - pd.Timedelta(days=hist_days)).date()
         hist_df = history_pool[history_pool["observed_at"].dt.date >= cutoff_date].copy()
 
-        # Build facility states from this limited history
+        # Build facility states from this limited history — NORMAL rows only:
+        # injected anomalies must never contaminate the baseline being scored.
         states = {}
         fac_obs = hist_df[hist_df["facility_id"] != ""]
+        if "label_normality" in fac_obs.columns:
+            fac_obs = fac_obs[fac_obs["label_normality"] == "normal"]
         for fid, group in fac_obs.groupby("facility_id"):
             states[str(fid)] = build_facility_normal_state(group, str(fid), "")
 
@@ -73,7 +76,9 @@ def run_data_efficiency(
                 y_true.append(1 if row["label_normality"] == "abnormal" else 0)
                 confidences.append(0.0)
                 continue
-            r = intensity_residual(row["frp"], st)
+            r = intensity_residual(
+                row["frp"], st, hour=pd.Timestamp(row["observed_at"]).hour,
+            )
             y_true.append(1 if row["label_normality"] == "abnormal" else 0)
             y_pred.append(1 if (r.z is not None and abs(r.z) > 3.5) else 0)
             confidences.append(min(abs(r.z or 0) / 5.0, 1.0))

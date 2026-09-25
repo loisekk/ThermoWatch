@@ -65,7 +65,11 @@ from app.research.metrics import (
     false_alerts_per_facility_day,
 )
 from app.research.runner import run_experiment
-from app.research.splits import facility_grouped_split, temporal_split
+from app.research.splits import (
+    facility_grouped_split,
+    geographic_split,
+    temporal_split,
+)
 from app.research.topology import topology_change, window_zones
 
 CLASS_TO_IDX = {c: i for i, c in enumerate(SOURCE_CLASSES)}
@@ -130,12 +134,13 @@ def add_normality_features(df: pd.DataFrame, states: dict) -> pd.DataFrame:
             cols["state_log_median"][i] = st.log_frp_median
         if st.log_frp_mad is not None:
             cols["state_log_mad"][i] = st.log_frp_mad
-        if st.night_ratio is not None:
-            observed_at = pd.to_datetime(str(row.observed_at), errors="coerce")
-            hour = int(observed_at.strftime("%H")) if not pd.isna(observed_at) else -1
+        observed_at = pd.to_datetime(str(row.observed_at), errors="coerce")
+        hour = (int(observed_at.strftime("%H"))
+                if not pd.isna(observed_at) else None)
+        if st.night_ratio is not None and hour is not None:
             is_night = 1.0 if (hour < 6 or hour >= 18) else 0.0
             cols["night_ratio_delta"][i] = is_night - st.night_ratio
-        r = intensity_residual(float(str(row.frp)), st)
+        r = intensity_residual(float(str(row.frp)), st, hour=hour)
         if r.z is not None:
             cols["intensity_z"][i] = r.z
             cols["intensity_abs_z"][i] = abs(r.z)
@@ -147,7 +152,12 @@ def add_normality_features(df: pd.DataFrame, states: dict) -> pd.DataFrame:
 def add_spatial_features(
     df: pd.DataFrame, states: dict, new_zone_km: float = 1.5
 ) -> pd.DataFrame:
-    """Rung E: distance to nearest normal zone, new-zone flag."""
+    """Rung E: distance to nearest normal zone, new-zone flag.
+
+    The gate is pixel-aware (plan 4.1): each row's own scan/track (km) is
+    passed through, so the tolerance is zone extent + that row's pixel
+    half-diagonal + the margin.
+    """
     cols = {k: np.zeros(len(df)) for k in
             ["nearest_zone_km", "is_new_zone", "n_zones", "zone_noise_share",
              "zones_known"]}
@@ -155,11 +165,17 @@ def add_spatial_features(
         st = states.get(row.facility_id) if row.facility_id else None
         if st is None or not st.sufficient:
             continue
+        extra = {}
+        scan_km = getattr(row, "scan", None)
+        track_km = getattr(row, "track", None)
+        if scan_km is not None and track_km is not None:
+            extra = {"obs_scan_km": float(scan_km), "obs_track_km": float(track_km)}
         r = spatial_residual(
             float(str(row.latitude)),
             float(str(row.longitude)),
             st,
             new_zone_km,
+            **extra,
         )
         cols["n_zones"][i] = len(st.zones)
         cols["zone_noise_share"][i] = st.noise_share
@@ -299,12 +315,19 @@ def run_matrix(
     """
     if split_name == "facility_grouped":
         train_idx, test_idx, split_manifest = facility_grouped_split(df, seed=seed)
+    elif split_name == "geographic":
+        train_idx, test_idx, split_manifest = geographic_split(df)
     else:
         train_idx, test_idx, split_manifest = temporal_split(df)
     train_df, test_df = df.loc[train_idx].copy(), df.loc[test_idx].copy()
 
     # --- Normal states from TRAIN fold ONLY (leakage control) ---
-    states = build_states_for_fold(train_df)
+    # Anomalies NEVER enter the baseline: injected spikes in the train fold
+    # would contaminate the very median/MAD the detector is scored against.
+    normal_train = train_df
+    if "label_normality" in train_df.columns:
+        normal_train = train_df[train_df["label_normality"] == "normal"]
+    states = build_states_for_fold(normal_train)
     n_sufficient = sum(1 for s in states.values() if s.sufficient)
 
     # --- Rule-detector thresholds from TRAIN only ---
@@ -419,6 +442,8 @@ def run_matrix(
 
     conclusion = _conclusion(split_name, comparison, states, n_sufficient,
                              rule_rows, anom_breakdown, source)
+    if split_manifest.get("gates"):
+        conclusion += "\n" + _geographic_gates_md(split_manifest)
 
     metrics = {
         "experiment": "E02_normality_matrix",
@@ -428,6 +453,7 @@ def run_matrix(
             ("split_method", "split_id", "n_train_observations",
              "n_test_observations") if k in split_manifest
         },
+        "split_gates": split_manifest.get("gates"),
         "states": {"n_facilities": len(states), "n_sufficient": n_sufficient},
         "rule_detector": {
             "tuned_thresholds": {"z": zt, "surprise": st_},
@@ -439,6 +465,50 @@ def run_matrix(
         "ladder": rows,
     }
     return metrics, pd.concat(predictions, ignore_index=True), conclusion
+
+
+def _geographic_gates_md(manifest: dict) -> str:
+    """R1-R4 leakage gates + R4 class-support table for the conclusion.
+
+    An INVALID result must come from data, never from a silently leaky split:
+    every gate is printed with its status, and a class absent from one side is
+    a documented insufficiency instead of a scored number.
+    """
+    g = manifest.get("gates", {}) or {}
+    support = g.get("R4_support", {}) or {}
+    lines = [
+        "",
+        "### Geographic split leakage gates (R1-R4)",
+        "",
+        f"- lon split {manifest.get('lon_split')} (train=west, test=east), "
+        f"buffer {manifest.get('buffer_km')} km: "
+        f"{manifest.get('dropped_in_buffer')} rows dropped in buffer, "
+        f"{len(manifest.get('dropped_straddling') or [])} straddling "
+        "groups dropped.",
+        "",
+        "| gate | status |",
+        "|---|---|",
+        f"| R1 disjoint groups | {g.get('R1_disjoint')} |",
+        f"| R2 buffer | {g.get('R2_buffer')} |",
+        f"| R3 no straddling group | {g.get('R3_no_straddle')} |",
+        f"| R4 class support | {g.get('R4_support_status')} |",
+        "",
+        "R4 support table (train side, test side):",
+        "",
+        "| source class | train | test |",
+        "|---|---|---|",
+    ]
+    for cls, counts in support.items():
+        w, e = counts[0], counts[1]
+        lines.append(f"| {cls} | {w} | {e} |")
+    missing = g.get("R4_missing_on_one_side") or []
+    if missing:
+        lines += [
+            "",
+            "**Documented insufficiency:** classes missing on one side: "
+            f"{', '.join(missing)} — reported as such, never scored away.",
+        ]
+    return "\n".join(lines)
 
 
 def _facility_acc(test_df: pd.DataFrame, y_pred: list[str]) -> float | None:
@@ -612,7 +682,8 @@ def main() -> None:
     ap = argparse.ArgumentParser(
         description="E02-E07 facility-normality ablation matrix")
     ap.add_argument("--n-days", type=int, default=120)
-    ap.add_argument("--split", choices=["both", "temporal", "facility_grouped"],
+    ap.add_argument("--split", choices=["both", "temporal", "facility_grouped",
+                                        "geographic"],
                     default="both")
     ap.add_argument("--seed", type=int, default=SPLIT_SEED)
     ap.add_argument("--source", default="synthetic")
@@ -627,6 +698,8 @@ def main() -> None:
     for split_name in splits:
         if split_name == "facility_grouped":
             _, _, split_manifest = facility_grouped_split(df, seed=args.seed)
+        elif split_name == "geographic":
+            _, _, split_manifest = geographic_split(df)
         else:
             _, _, split_manifest = temporal_split(df)
 

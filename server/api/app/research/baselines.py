@@ -78,14 +78,18 @@ def extract_b1_features(df: pd.DataFrame, facility_coords: list[tuple[float, flo
         types.append(best_t)
 
     b1 = b0.copy()
-    dist_arr = np.array(distances)
-    b1["facility_distance_km"] = dist_arr
-    b1["near_facility"] = (dist_arr < 2.0).astype(int)
+    dists = np.asarray(distances, dtype=float)
+    types_arr = np.asarray(types, dtype=object)
+    b1["facility_distance_km"] = dists
+    b1["near_facility"] = (dists < 2.0).astype(int)
+    # Continuous proximity signal — the one-hots below are gated at 2 km so a
+    # wildfire 3 km from a refinery can never inherit near_refinery=1 (H6/H7).
+    b1["facility_distance_decay"] = np.exp(-dists / 5.0)
 
-    # One-hot encode nearest facility type
+    # One-hot encode nearest facility type — ONLY when actually near it
     for ftype in ["refinery", "steel", "gas_flare", "cement", "smelter",
                   "waste_incineration", "power_plant", "chemical", "none"]:
-        b1[f"near_{ftype}"] = (np.array(types) == ftype).astype(int)
+        b1[f"near_{ftype}"] = ((types_arr == ftype) & (dists <= 2.0)).astype(int)
 
     # Landcover one-hot
     for lc in ["forest", "agriculture", "industrial", "urban", "water", "barren", "unknown"]:

@@ -33,7 +33,11 @@ from app.research.dataset import (
     load_real_dataset,
 )
 from app.research.runner import run_experiment
-from app.research.splits import facility_grouped_split
+from app.research.splits import (
+    facility_grouped_split,
+    geographic_split,
+    temporal_split_with_abnormal_support,
+)
 
 
 def run_e1(
@@ -47,9 +51,13 @@ def run_e1(
     # --- Split ---
     if split_method == "facility_grouped":
         train_idx, test_idx, split_manifest = facility_grouped_split(df, test_size, seed)
+    elif split_method == "geographic":
+        train_idx, test_idx, split_manifest = geographic_split(df)
     else:
-        from app.research.splits import temporal_split
-        train_idx, test_idx, split_manifest = temporal_split(df)
+        # Temporal = the A5 frame: assert abnormal support in the future
+        # window (shifting the cutoff earlier if the default lands before
+        # the injected spikes) so anomaly-task P/R is computable there.
+        train_idx, test_idx, split_manifest = temporal_split_with_abnormal_support(df)
 
     train_df = df.loc[train_idx].copy()
     test_df = df.loc[test_idx].copy()
@@ -102,7 +110,8 @@ def run_e1(
     results["B4_statistical"] = run_b4_statistical_anomaly(train_df, test_df)
 
     comparison = _comparison_table(results)
-    conclusion = _generate_conclusion(results, comparison, source)
+    anomaly_task = _anomaly_task_report(split_manifest, results)
+    conclusion = _generate_conclusion(results, comparison, source, anomaly_task)
 
     predictions_df = (
         pd.concat(all_predictions, ignore_index=True) if all_predictions else pd.DataFrame()
@@ -118,6 +127,7 @@ def run_e1(
         },
         "comparison_table": comparison,
         "results": results,
+        "anomaly_task_future_window": anomaly_task,
     }
     return metrics, predictions_df, conclusion
 
@@ -157,7 +167,39 @@ def _comparison_table(results):
     return rows
 
 
-def _generate_conclusion(results, comparison, source):
+def _anomaly_task_report(split_manifest: dict, results: dict) -> dict | None:
+    """Anomaly task on the FUTURE window (the A5 frame).
+
+    Precision/recall are reported where negatives (normal rows) actually
+    exist — normal vs abnormal in the held-out future window — together with
+    the abnormal-support assertion. Source-classification precision on a
+    detections-only window has no negatives and is never quoted instead.
+    """
+    check = split_manifest.get("abnormal_support_check")
+    if check is None:
+        return None
+    b4 = results.get("B4_statistical", {}) or {}
+    fa = b4.get("false_alert_metrics") or {}
+    return {
+        "window": "future (test) window, normal vs abnormal",
+        "abnormal_test_rows": split_manifest.get("abnormal_test_rows"),
+        "abnormal_support_required": split_manifest.get(
+            "abnormal_support_required"),
+        "abnormal_support_check": check,
+        "abnormal_support_shifted": split_manifest.get("abnormal_support_shifted"),
+        "b4_precision": b4.get("abnormal_precision"),
+        "b4_recall": b4.get("abnormal_recall"),
+        "b4_f1": b4.get("abnormal_f1"),
+        "b4_false_alerts_per_facility_day": fa.get(
+            "false_alert_rate_per_facility_day"),
+        "b4_n_evaluable": b4.get("n_evaluable"),
+        "note": ("B4 facility z-score on the future window; "
+                 "source-classification precision is undefined on a "
+                 "detections-only window and is NOT quoted here."),
+    }
+
+
+def _generate_conclusion(results, comparison, source, anomaly_task=None):
     b0_f1 = results.get("B0_firms_only", {}).get("classification", {}).get("macro_f1")
     b1_f1 = results.get("B1_firms_context", {}).get("classification", {}).get("macro_f1")
     b3_f1 = results.get("B3_combined", {}).get("classification", {}).get("macro_f1")
@@ -184,6 +226,32 @@ def _generate_conclusion(results, comparison, source):
             f"- B4 (anomaly z-score): abnormal F1 = **{b4['abnormal_f1']}**, "
             f"false-alert rate = {b4['false_alert_metrics'].get('false_alert_rate_per_facility_day')}"
         )
+
+    if anomaly_task:
+        at = anomaly_task
+        shift = (
+            " (cutoff shifted earlier to guarantee support — recorded in the "
+            "split manifest)" if at.get("abnormal_support_shifted") else ""
+        )
+        lines += [
+            "",
+            "### Anomaly task — future window (A5 frame)",
+            "",
+            f"- Abnormal rows in the test window: {at['abnormal_test_rows']} "
+            f"(required >= {at['abnormal_support_required']}) — "
+            f"**{at['abnormal_support_check']}**{shift}",
+            f"- B4 facility z-score: precision={at['b4_precision']}, "
+            f"recall={at['b4_recall']}, F1={at['b4_f1']}, "
+            f"false alerts/facility-day="
+            f"{at['b4_false_alerts_per_facility_day']} "
+            f"(n_evaluable={at['b4_n_evaluable']})",
+            "- Source-classification precision on this window is undefined "
+            "(detections-only window, no source negatives) and is NOT quoted.",
+        ]
+        if at["abnormal_support_check"] != "PASS":
+            lines.append(
+                "- **SUPPORT FAIL** — recorded, never estimated: the dataset "
+                "does not carry enough abnormal rows after the cut.")
 
     lines += [
         "",
@@ -213,7 +281,9 @@ def main():
     parser.add_argument("--csv", help="Path to FIRMS archive CSV")
     parser.add_argument("--n-days", type=int, default=120)
     parser.add_argument("--seed", type=int, default=SPLIT_SEED)
-    parser.add_argument("--split", choices=["facility_grouped", "temporal"], default="facility_grouped")
+    parser.add_argument("--split", choices=["facility_grouped", "temporal",
+                                            "geographic"],
+                        default="facility_grouped")
     args = parser.parse_args()
 
     if args.source == "synthetic":

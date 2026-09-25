@@ -60,8 +60,11 @@ class Settings(BaseSettings):
     state_min_obs: int = 10                # below this: INSUFFICIENT_HISTORY
     state_min_days: int = 14
     state_lookback_days: int = 90
-    state_zone_eps_km: float = 1.0         # DBSCAN cluster radius
-    state_zone_min_samples: int = 3
+    # DBSCAN cluster radius. One VIIRS pixel is ~375 m, but a detection series
+    # from one stack spans the full pixel footprint (MODIS far larger) — 1.0 km
+    # under-clustered by design and fragmented zones into jitter artifacts.
+    state_zone_eps_km: float = 2.0
+    state_zone_min_samples: int = 5
     state_cache_ttl_s: int = 300
 
     # --- Abnormality thresholds (rule detector; tuned on train folds in E02) ---

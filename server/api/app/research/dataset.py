@@ -13,7 +13,7 @@ Schema (one row = one satellite observation):
     platform             str     "terra"|"aqua"|"snpp"|"noaa20"
     frp                  float   Fire Radiative Power (MW)
     brightness_ti4/ti5   float   fire/background channel brightness (K)
-    scan / track         float   pixel dimensions (deg)
+    scan / track         float   pixel dimensions (km) — FIRMS convention
     confidence           str     "low"|"nominal"|"high"
     day_night           str     "day"|"night"
     landcover            str     "forest"|"agriculture"|"urban"|"industrial"|...
@@ -33,6 +33,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from app.ml.observation_uncertainty import jitter_position, km_to_deg_lat
 from app.research.config import SYNTHETIC_SEED
 
 
@@ -197,10 +198,12 @@ def _make_observation(
     conf_score = 0.35 * min(ln_frp / 5.0, 1.0) + 0.45 * min(delta_t / 30.0, 1.0) + rng.normal(0, 0.12)
     confidence = "high" if conf_score > 0.55 else ("nominal" if conf_score > 0.30 else "low")
 
-    # Slight coordinate jitter (sub-pixel)
-    jitter_deg = scan / 4.0
-    lat_j = lat + rng.normal(0, jitter_deg * 0.3)
-    lon_j = lon + rng.normal(0, jitter_deg * 0.3)
+    # Coordinate jitter INSIDE the pixel footprint, via the SHARED model
+    # (plan 4.1). scan/track are km: the pre-fix code divided the km value by
+    # 4 and added it as DEGREES, scattering a fixed source across 4-22 km —
+    # the generator half of the false-alert mechanism. sigma is now
+    # half-extent/sqrt(12), bounded by the footprint.
+    lat_j, lon_j = jitter_position(lat, lon, scan, track, rng)
 
     is_night = hour < 6 or hour >= 18
     observed_at = day + pd.Timedelta(hours=hour, minutes=int(rng.integers(0, 60)))
@@ -274,7 +277,7 @@ def _inject_anomalies(df: pd.DataFrame, rng, fraction: float) -> pd.DataFrame:
 
     Anomaly types (matching H2/H4):
       - intensity_spike: FRP multiplied by 3-8x
-      - displaced_source: coordinates shifted by ~0.5-2 km
+      - displaced_source: coordinates shifted 1.5-4 km (physically detectable)
     Marked as label_normality="abnormal".
     """
     df = df.copy()
@@ -284,7 +287,11 @@ def _inject_anomalies(df: pd.DataFrame, rng, fraction: float) -> pd.DataFrame:
     if n_anomalies == 0:
         return df
 
-    # Pick affected facility-days (one anomaly per facility-day)
+    # Pick affected facility-days (one anomaly per facility-day),
+    # stratified UNIFORMLY ACROSS THE DATE RANGE: sampling rows uniformly
+    # front-loads anomalies whenever detection density drifts over time, and
+    # a future window that lands after all injected spikes has no positives
+    # to score. Equal-count date strata guarantee both windows carry spikes.
     observed_dates = pd.to_datetime(
         df["observed_at"], errors="coerce"
     ).dt.date
@@ -292,10 +299,35 @@ def _inject_anomalies(df: pd.DataFrame, rng, fraction: float) -> pd.DataFrame:
     candidates["date"] = observed_dates.loc[facility_obs]
     unique_fd = candidates.drop_duplicates().index.to_numpy()
     n_anom = min(n_anomalies, len(unique_fd))
-    anomalous_fd = rng.choice(unique_fd, size=n_anom, replace=False)
+    if n_anom == 0:
+        return df
+
+    # Order unique facility-days by date and split into equal-count strata.
+    fd_dates = candidates.loc[unique_fd, "date"].to_numpy()
+    sorted_fd = unique_fd[np.argsort(fd_dates, kind="stable")]
+    n_strata = max(1, min(10, len(sorted_fd)))
+    strata = [list(s) for s in np.array_split(sorted_fd, n_strata) if len(s)]
+
+    # Even allocation across strata (+1 each to the first remainders), with
+    # shortfall carried forward and any residual filled from leftovers.
+    base, rem = divmod(n_anom, len(strata))
+    targets = [base + (1 if i < rem else 0) for i in range(len(strata))]
+    selected: list = []
+    carry = 0
+    for i, lst in enumerate(strata):
+        want = targets[i] + carry
+        take = min(want, len(lst))
+        carry = want - take
+        if take:
+            picked = rng.choice(np.asarray(lst), size=take, replace=False)
+            selected.extend(picked.tolist())
+            strata[i] = [x for x in lst if x not in set(picked.tolist())]
+    if carry:
+        leftover = [i for lst in strata for i in lst]
+        selected.extend(leftover[:carry])
 
     anomalous_indices = set()
-    for idx in anomalous_fd:
+    for idx in selected:
         fid = df.loc[idx, "facility_id"]
         dt = observed_dates.loc[idx]
         mask = (df["facility_id"] == fid) & (observed_dates == dt)
@@ -315,7 +347,11 @@ def _inject_anomalies(df: pd.DataFrame, rng, fraction: float) -> pd.DataFrame:
             df.loc[idx, "brightness_ti4"] = round(
                 df.loc[idx, "brightness_ti4"] + 22.0 * np.log(mult), 2)
         elif atype == "displaced_source":
-            shift = float(rng.uniform(0.005, 0.02))  # ~0.5-2 km
+            # Physically DETECTABLE displacement (plan 4.1/4.6): a sub-pixel
+            # shift is unresolvable by construction, so the old 0.5-2 km
+            # range tested physics the mission cannot deliver. 1.5-4 km is a
+            # genuinely different unit within a large facility.
+            shift = km_to_deg_lat(float(rng.uniform(1.5, 4.0)))
             latitude_value = pd.to_numeric(df.at[idx, "latitude"], errors="coerce")
             longitude_value = pd.to_numeric(df.at[idx, "longitude"], errors="coerce")
             latitude = float(latitude_value) if pd.notna(latitude_value) else 0.0

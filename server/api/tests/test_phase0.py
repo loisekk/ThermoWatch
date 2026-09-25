@@ -161,6 +161,58 @@ class TestSplits:
             assert not (set(train_idx) & set(test_idx))
             assert (small_df.loc[test_idx, "facility_id"] == fid).all()
 
+    def test_geographic_split_gates_and_disjointness(self, small_df):
+        """Fix 5: the buffered meridian split must PASS its R1-R3 gates,
+        keep groups disjoint (re-verified independently), and report R4
+        per-class support instead of silently scoring one side."""
+        from app.research.splits import geographic_split
+
+        train_idx, test_idx, manifest = geographic_split(small_df)
+        gates = manifest["gates"]
+        assert gates["R1_disjoint"] == "PASS"
+        assert gates["R2_buffer"] == "PASS"
+        assert gates["R3_no_straddle"] == "PASS"
+        assert isinstance(gates["R4_support"], dict) and gates["R4_support"]
+
+        # Independent re-verification: groups never span the two sides
+        groups = small_df.apply(
+            lambda r: r["facility_id"] if r["facility_id"]
+            else f"event:{r['event_id']}", axis=1)
+        assert not (set(groups.loc[train_idx]) & set(groups.loc[test_idx]))
+        # Sides are on the correct side of the meridian, buffer rows dropped
+        assert (small_df.loc[train_idx, "longitude"] < 78.0).all()
+        assert (small_df.loc[test_idx, "longitude"] >= 78.0).all()
+        buf = manifest["buffer_deg"]
+        kept = small_df.index.isin(train_idx) | small_df.index.isin(test_idx)
+        in_buffer = ((small_df["longitude"] > 78.0 - buf)
+                     & (small_df["longitude"] < 78.0 + buf))
+        assert not (in_buffer & kept).any()
+        # Train/test partition excludes exactly the dropped rows
+        assert len(train_idx) + len(test_idx) <= len(small_df)
+
+    def test_temporal_split_guarantees_abnormal_support(self, small_df):
+        """Fix 6: anomaly-task P/R needs >=20 abnormal test rows — the
+        cutoff must shift to guarantee it, and the shift is recorded."""
+        from app.research.splits import temporal_split_with_abnormal_support
+
+        train_idx, test_idx, manifest = temporal_split_with_abnormal_support(
+            small_df)
+        total_abn = int((small_df["label_normality"] == "abnormal").sum())
+        test_abn = int(
+            (small_df.loc[test_idx, "label_normality"] == "abnormal").sum())
+        assert not (set(train_idx) & set(test_idx))
+        assert manifest["abnormal_support_required"] == 20
+        assert manifest["abnormal_test_rows"] == test_abn
+        if total_abn >= 20:
+            assert test_abn >= 20, "shift must guarantee the support"
+            assert manifest["abnormal_support_check"] == "PASS"
+            assert not (small_df.loc[train_idx, "observed_at"].max()
+                        >= small_df.loc[test_idx, "observed_at"].min()), \
+                "shifted cutoff must still be a strict time cut"
+        else:
+            assert manifest["abnormal_support_check"] == "FAIL", \
+                "insufficient dataset support must be recorded, never faked"
+
 
 
 class TestMetrics:
@@ -227,6 +279,46 @@ class TestBaselines:
         assert set(b1.columns).issubset(set(b3.columns))
         assert {"persist_7d", "persist_30d", "frp_vs_history"}.issubset(set(b3.columns))
         assert b3.shape[1] > b1.shape[1]
+
+    def test_b1_type_onehots_gated_by_distance(self):
+        """Fix 4 (H6/H7): near_<type> one-hots must not be inherited by a
+        detection that is merely NEAREST to a facility — only one within
+        2 km — while the continuous decay feature still carries proximity."""
+        import pandas as pd
+
+        from app.research.baselines import extract_b1_features, get_facility_coords
+
+        coords = get_facility_coords()
+        jamnagar = next(c for c in coords if c[2] == "refinery"
+                        and abs(c[0] - 22.47) < 0.1)  # F-001
+
+        base = {
+            "frp": 12.0, "brightness_ti4": 320.0, "brightness_ti5": 300.0,
+            "scan": 0.5, "track": 0.4, "day_night": "day",
+            "sensor": "viirs", "confidence": "nominal",
+            "landcover": "industrial",
+            "observed_at": pd.Timestamp("2026-06-01 12:00:00", tz="UTC"),
+        }
+        near = dict(base, latitude=jamnagar[0], longitude=jamnagar[1])
+        # ~3.1 km east of the refinery: nearest is the refinery, too far
+        far = dict(base, latitude=jamnagar[0], longitude=jamnagar[1] + 0.03)
+        df = pd.DataFrame([near, far])
+        b1 = extract_b1_features(df, coords)
+
+        assert b1.loc[0, "near_refinery"] == 1
+        assert b1.loc[0, "near_facility"] == 1
+        assert b1.loc[1, "near_refinery"] == 0, \
+            "3 km away must NOT inherit the refinery one-hot"
+        assert b1.loc[1, "near_facility"] == 0
+        assert all(b1.loc[1, f"near_{t}"] == 0 for t in
+                   ["refinery", "steel", "gas_flare", "cement", "smelter",
+                    "waste_incineration", "power_plant", "chemical", "none"])
+        # Continuous proximity survives the gate
+        assert "facility_distance_decay" in b1.columns
+        assert float(str(b1.loc[1, "facility_distance_decay"])) > 0.4
+        assert float(str(b1.loc[0, "facility_distance_decay"])) > float(
+            str(b1.loc[1, "facility_distance_decay"])
+        )
 
     def test_b4_threshold_selected_on_train(self, small_df):
         from app.research.baselines import run_b4_statistical_anomaly

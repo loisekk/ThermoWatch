@@ -38,7 +38,15 @@ def _engine_kwargs() -> dict:
     return kwargs
 
 
-engine = create_async_engine(settings.database_url, **_engine_kwargs())
+def _normalize_db_url(url: str) -> str:
+    """Providers (Supabase, Neon, Render) hand out postgresql:// URIs.
+    This stack is async — rewrite to the asyncpg driver transparently."""
+    if url.startswith("postgresql://"):
+        return url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    return url
+
+
+engine = create_async_engine(_normalize_db_url(settings.database_url), **_engine_kwargs())
 
 # Session factory — expire_on_commit=False so returned ORM objects stay usable
 # after the commit inside get_session (needed by response serialization).
